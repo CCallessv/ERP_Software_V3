@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block full_content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Directorio de Proveedores</h2>
+                <div class="text-secondary mt-1">Gestiona tus fuentes de suministro y condiciones de crédito.</div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <button class="btn btn-primary" hx-get="{% url 'proveedor_crear' %}" hx-target="#modal-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+                    Nuevo Proveedor
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="row row-cards mb-3">
+            <div class="col-md-4">
+                <div class="card card-sm">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <span class="bg-primary text-white avatar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /></svg></span>
+                            </div>
+                            <div class="col">
+                                <div class="font-weight-medium">{{ total_proveedores }} Proveedores</div>
+                                <div class="text-secondary">Activos en el sistema</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+        <div class="card">
+            <div class="card-body border-bottom py-3">
+                <div class="d-flex">
+                    <div class="text-secondary">
+                        Buscar:
+                        <div class="ms-2 d-inline-block">
+                            <input type="text" name="q" class="form-control form-control-sm" 
+                                   placeholder="Nombre o NIT..."
+                                   hx-get="{% url 'proveedor_list' %}" 
+                                   hx-trigger="keyup changed delay:500ms" 
+                                   hx-target="#proveedor-table-body">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table card-table table-vcenter text-nowrap datatable">
+                    <thead>
+                        <tr>
+                            <th>Nombre Comercial</th>
+                            <th>NIT / NRC</th>
+                            <th>Clasificación</th>
+                            <th>Contacto</th>
+                            <th>Días Crédito</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="proveedor-table-body" 
+                    hx-get="{% url 'proveedor_list' %}" 
+                    hx-trigger="proveedorActualizado from:body">
+                 {% include 'core/partials/proveedor_table_rows.html' %}
+             </tbody>
+                </table>
+            </div>
+        </div>
+    </div> 
+</div>
+
+{% endblock %}  {% block scripts %}
+    {{ block.super }}
+    <script src="{% static 'js/modal_proveedores_handler.js' %}"></script>
+{% endblock %}

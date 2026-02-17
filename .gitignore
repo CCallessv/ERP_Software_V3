@@ -1,0 +1,25 @@
+# Python (Archivos compilados y caché)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entorno Virtual (¡Fundamental para no saturar GitHub!)
+venv/
+env/
+.venv/
+
+# Base de Datos Local (Para que cada quien tenga sus propios datos)
+db.sqlite3
+*.sqlite3
+
+# Archivos de configuración y secretos (Seguridad)
+.env
+.env.local
+
+# Carpetas de Editores (VS Code)
+.vscode/
+.idea/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db

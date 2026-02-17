@@ -1,0 +1,59 @@
+{% for proveedor in proveedores %}
+<tr>
+    <td>
+        <div class="d-flex py-1 align-items-center">
+            <span class="avatar me-2" style="background-color: #f0f2f6; color: #626976;">
+                {{ proveedor.nombre_comercial|make_list|first|upper }}
+            </span>
+            <div class="flex-fill">
+                <div class="font-weight-medium">{{ proveedor.nombre_comercial }}</div>
+                <div class="text-secondary"><small>{{ proveedor.razon_social|default:"N/A" }}</small></div>
+            </div>
+        </div>
+    </td>
+    <td>
+        <div>{{ proveedor.nit }}</div>
+        <div class="text-secondary"><small>NRC: {{ proveedor.nrc|default:"No Registrado" }}</small></div>
+    </td>
+    <td class="text-secondary">
+        {% if proveedor.clasificacion == 'grande' %}
+            <span class="badge bg-purple-lt">Gran Contribuyente</span>
+        {% elif proveedor.clasificacion == 'mediano' %}
+            <span class="badge bg-blue-lt">Mediano</span>
+        {% elif proveedor.clasificacion == 'pequeno' %}
+            <span class="badge bg-green-lt">Pequeño</span>
+        {% else %}
+            <span class="badge bg-red-lt">No Contribuyente</span>
+        {% endif %}
+    </td>
+    <td class="text-secondary">
+        <div>{{ proveedor.contacto_nombre|default:"Sin Contacto" }}</div>
+        <div><small>{{ proveedor.telefono }}</small></div>
+    </td>
+    <td>
+        {% if proveedor.dias_credito > 0 %}
+            <span class="badge bg-yellow-lt">{{ proveedor.dias_credito }} días</span>
+        {% else %}
+            <span class="badge bg-secondary-lt">Contado</span>
+        {% endif %}
+    </td>
+    <td class="text-end">
+        <button class="btn btn-sm btn-outline-primary" 
+                hx-get="{% url 'proveedor_editar' proveedor.pk %}" 
+                hx-target="#modal-container">
+            Editar
+        </button>
+        <button class="btn btn-sm btn-outline-danger ms-1"
+                hx-get="{% url 'eliminar_proveedor' proveedor.pk %}"
+                hx-target="#modal-container">
+            Eliminar
+        </button>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="6" class="text-center py-4 text-secondary">
+        No hay proveedores registrados o no coinciden con la búsqueda.
+    </td>
+</tr>
+{% endfor %}

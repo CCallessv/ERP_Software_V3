@@ -1,0 +1,77 @@
+<div class="modal modal-blur fade" id="modal-cliente" tabindex="-1" aria-hidden="true" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{% if cliente.pk %}Editar Cliente{% else %}Nuevo Cliente{% endif %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form {% if cliente.pk %} hx-post="{% url 'editar_cliente' cliente.pk %}" {% else %} hx-post="{% url 'crear_cliente' %}" {% endif %} hx-target="#modal-container">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-lg-12 mb-3">
+              <label class="form-label">Nombre / Razón Social</label>
+              {{ form.nombres }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">DUI / NIT</label>
+              {{ form.documento }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">NRC</label>
+              {{ form.nrc }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">Giro</label>
+              {{ form.giro }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">Teléfono</label>
+              {{ form.telefono }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">Límite de Crédito ($)</label>
+              {{ form.limite_credito }}
+            </div>
+
+            <div class="col-lg-6 mb-3">
+              <label class="form-label">Días de Crédito</label>
+              {{ form.plazo_credito }}
+            </div>
+
+            <div class="col-lg-12 mb-3">
+              <label class="form-check form-switch">
+                  {{ form.estado }} 
+                  <span class="form-check-label">Cliente Activo</span>
+              </label>
+              <small class="form-hint">Desmarca esta casilla para desactivar al cliente.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          
+          <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Guardar Cliente
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>

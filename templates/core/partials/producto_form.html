@@ -1,0 +1,189 @@
+{% load static %}
+
+<div class="modal modal-blur fade" id="modal-producto" tabindex="-1" aria-modal="true" role="dialog">
+    
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+      
+      <div class="modal-header">
+        <h5 class="modal-title">{{ titulo_modal }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <form hx-post="{{ url_post }}" 
+            hx-target="#modal-container" 
+            hx-encoding="multipart/form-data" 
+            hx-sync="this:drop"
+            class="modal-body"
+            novalidate>
+            
+        {% csrf_token %}
+        
+        {% if form.errors %}
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-title">No se pudo guardar el producto por estos errores:</h4>
+            <div class="text-secondary">
+                {{ form.errors }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="mb-3">
+          <label class="form-label">¿Qué tipo de ítem vas a crear?</label>
+          {{ form.tipo }} 
+          <div class="row g-2">
+            <div class="col-4">
+              <label class="form-selectgroup-item-card card-tipo" onclick="selectTipo('materia_prima')">
+                <div class="card card-sm border-2 cursor-pointer hover-shadow border-primary"> 
+                  <div class="card-body text-center p-3">
+                      <div class="mb-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-azure" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="12" cy="18" r="2" /><circle cx="7" cy="6" r="2" /><circle cx="17" cy="6" r="2" /><path d="M7 8v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-2" /><line x1="12" y1="12" x2="12" y2="16" /></svg>
+                      </div>
+                      <div class="font-weight-medium">Materia Prima</div>
+                      <div class="text-secondary small mt-1">Carne en canal (Padre)</div>
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div class="col-4">
+              <label class="form-selectgroup-item-card card-tipo" onclick="selectTipo('subproducto')">
+                <div class="card card-sm border-2 cursor-pointer hover-shadow">
+                  <div class="card-body text-center p-3">
+                      <div class="mb-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-indigo" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6" cy="7" r="3" /><circle cx="6" cy="17" r="3" /><line x1="8.6" y1="8.6" x2="19" y2="19" /><line x1="8.6" y1="15.4" x2="19" y2="5" /></svg>
+                      </div>
+                      <div class="font-weight-medium">Subproducto</div>
+                      <div class="text-secondary small mt-1">Derivado (Posta, Hueso)</div>
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div class="col-4">
+              <label class="form-selectgroup-item-card card-tipo" onclick="selectTipo('producto')">
+                <div class="card card-sm border-2 cursor-pointer hover-shadow">
+                  <div class="card-body text-center p-3">
+                      <div class="mb-2">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-lg text-green" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /><path d="M12 12l8 -4.5" /><path d="M12 12l0 9" /><path d="M12 12l-8 -4.5" /><path d="M16 5.25l-8 4.5" /></svg>
+                      </div>
+                      <div class="font-weight-medium">Producto Final</div>
+                      <div class="text-secondary small mt-1">Compra/Venta simple</div>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-lg-4">
+            <div class="mb-3">
+              <label class="form-label required">Código / SKU</label>
+              {{ form.codigo }}
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="mb-3">
+              <label class="form-label required">Nombre del Producto</label>
+              {{ form.nombre }}
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-lg-6">
+             <div class="mb-3">
+               <label class="form-label">Categoría</label>
+               {{ form.categoria }}
+             </div>
+          </div>
+          <div class="col-lg-6" id="campo-padre" style="display:none;">
+             <div class="mb-3">
+               <label class="form-label text-indigo"> Proviene de (Padre)</label>
+               {{ form.padre }}
+             </div>
+          </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-4">
+               <div class="mb-3">
+                  <label class="form-label">Unidad</label>
+                  {{ form.unidad_medida }}
+               </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="mb-3">
+                   <label class="form-label">Stock Inicial</label>
+                   {{ form.stock }}
+                </div>
+             </div>
+             <div class="col-lg-4">
+                <div class="mb-3">
+                   <label class="form-label">Stock Mínimo</label>
+                   {{ form.stock_minimo }}
+                </div>
+             </div>
+             <div class="col-lg-3">
+              <div class="mb-3">
+                 <label class="form-label">Stock Máximo</label>
+                 {{ form.stock_maximo }}
+              </div>
+           </div>
+        </div>
+
+        <div class="row">
+          <div class="col-lg-6">
+              <div class="mb-3">
+                  <label class="form-label">Costo ($)</label>
+                  {{ form.precio_costo }}
+              </div>
+          </div>
+          <div class="col-lg-6" id="div-precio-venta">
+              <div class="mb-3">
+                  <label class="form-label">Precio Venta ($)</label>
+                  {{ form.precio_venta }}
+              </div>
+          </div>
+      </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Imagen del Producto</label>
+            {{ form.imagen }} 
+        </div>
+
+        <div class="mb-3">
+          <div class="row">
+              <div class="col-auto">
+                  <label class="form-check form-switch">
+                    {{ form.activo }}
+                    <span class="form-check-label">Activo</span>
+                  </label>
+              </div>
+              <div class="col-auto">
+                  <label class="form-check form-switch">
+                      {{ form.es_vendible }}
+                      <span class="form-check-label">Se vende</span>
+                  </label>
+              </div>
+              <div class="col-auto">
+                  <label class="form-check form-switch">
+                      {{ form.es_comprable }}
+                      <span class="form-check-label">Se compra</span>
+                  </label>
+              </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <a href="#" class="btn btn-link link-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </a>
+          <button type="submit" class="btn btn-primary ms-auto" hx-disabled-elt="this">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+            Guardar Producto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

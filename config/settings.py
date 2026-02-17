@@ -75,12 +75,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+   'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'erp_db',       #  nombre de la base de datos en pgAdmin
+        'USER': 'postgres',            # Usuario de la base de datos
+        'PASSWORD': 'pass123',   
+        'HOST': 'localhost',
+        'PORT': '5432',
+    
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -104,7 +108,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-es'
 
 TIME_ZONE = 'UTC'
 
@@ -117,11 +121,23 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+import os
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    os.path.join(BASE_DIR, 'static'),
 ]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# --- Configuración de Login/Logout ---
+# URL para entrar (por si intentan entrar al dashboard sin permiso)
+LOGIN_URL = 'login'
+
+# Cuando el login es exitoso, ir al Dashboard (home)
+LOGIN_REDIRECT_URL = 'home' 
+
+# Cuando cierran sesión, mandarlos de vuelta al Login
+LOGOUT_REDIRECT_URL = 'login' 
+

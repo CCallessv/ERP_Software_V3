@@ -1,0 +1,27 @@
+<div class="modal modal-blur fade" id="modal-producto" tabindex="-1" style="display: block;">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-body">
+          <div class="modal-title">¿Estás seguro?</div>
+          <div>
+              Vas a eliminar el producto <strong>{{ producto.nombre }}</strong>. 
+              Esta acción no se puede deshacer.
+          </div>
+        </div>
+        <div class="modal-footer">
+          
+          <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">
+              Cancelar
+          </button>
+  
+          <form hx-post="{% url 'eliminar_producto' producto.pk %}" method="POST">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger" data-bs-dismiss="modal">
+                  Sí, eliminar producto
+              </button>
+          </form>
+          
+        </div>
+      </div>
+    </div>
+  </div>

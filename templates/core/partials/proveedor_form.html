@@ -1,0 +1,136 @@
+{% load static %}
+
+<div class="modal modal-blur" id="modal-proveedor" tabindex="-1" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {% if form.instance.pk %}Editar Proveedor{% else %}Nuevo Proveedor{% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form hx-post="{{ request.path }}" 
+                hx-target=".modal-content" 
+                hx-select=".modal-content"
+                hx-swap="outerHTML"
+                novalidate>
+                {% csrf_token %}
+                
+                <div class="modal-body">
+                    {% if form.errors %}
+                    <div class="alert alert-danger" role="alert">
+                        <div class="d-flex">
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+                            </div>
+                            <div>
+                                <h4 class="alert-title">Verifica los siguientes campos:</h4>
+                                <div class="text-secondary">{{ form.errors }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-lg-7">
+                            <div class="mb-3">
+                                <label class="form-label required">Nombre Comercial</label>
+                                {{ form.nombre_comercial }}
+                            </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Persona</label>
+                                {{ form.tipo_persona }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Razón Social (Nombre Legal)</label>
+                        {{ form.razon_social }}
+                    </div>
+
+                    <div class="hr-text">Datos Fiscales (El Salvador)</div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label required">NIT</label>
+                                {{ form.nit }}
+                                <small class="form-hint">Formato: 0000-000000-000-0</small>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label">NRC (Registro de IVA)</label>
+                                {{ form.nrc }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label">Clasificación Contribuyente</label>
+                                {{ form.clasificacion }}
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label">Giro / Actividad</label>
+                                {{ form.giro }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hr-text">Contacto y Crédito</div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label">Persona de Contacto</label>
+                                {{ form.contacto_nombre }}
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="mb-3">
+                                <label class="form-label required">Teléfono</label>
+                                {{ form.telefono }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <div class="mb-3">
+                                <label class="form-label">Días de Crédito</label>
+                                {{ form.dias_credito }}
+                            </div>
+                        </div>
+                        <div class="col-lg-8">
+                            <div class="mb-3">
+                                <label class="form-label">Límite de Crédito ($)</label>
+                                {{ form.limite_credito }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Dirección</label>
+                        {{ form.direccion }}
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary ms-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" /><path d="M12 14m-2 0a2 2 0 0 1 2 -2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2a2 2 0 0 1 -2 -2" /><path d="M14 4l0 4l-4 0l0 -4" /></svg>
+                        Guardar Proveedor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
