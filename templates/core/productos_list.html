@@ -21,13 +21,14 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 -5l5 5" /><path d="M12 4l0 12" /></svg>
             Exportar
           </a>
-        <button type="button" 
-            class="btn btn-primary d-none d-sm-inline-block" 
-            hx-get="{% url 'crear_producto' %}" 
-            hx-target="#modal-container"
-            hx-trigger="click throttle:500ms"> <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
-            Nuevo Producto
-        </button>
+          <button class="btn btn-primary d-none d-sm-inline-block" 
+                  hx-get="{% url 'crear_producto' %}" 
+                  hx-target="#dialog" 
+                  data-bs-toggle="modal" 
+                  data-bs-target="#modal-generic">
+              <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              Nuevo Producto
+          </button>
         </div>
       </div>
     </div>
@@ -56,43 +57,6 @@
                 </div>
             </div>
         </div>
-
-        <div class="col-sm-6 col-lg-2">
-            <div class="card card-sm">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-auto">
-                            <span class="bg-azure text-white avatar">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="12" cy="18" r="2" /><circle cx="7" cy="6" r="2" /><circle cx="17" cy="6" r="2" /><path d="M7 8v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-2" /><line x1="12" y1="12" x2="12" y2="16" /></svg>
-                            </span>
-                        </div>
-                        <div class="col">
-                            <div class="font-weight-medium">{{ total_padres }}</div>
-                            <div class="text-secondary">Padres</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-sm-6 col-lg-2">
-            <div class="card card-sm">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-auto">
-                            <span class="bg-indigo text-white avatar">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="6" cy="7" r="3" /><circle cx="6" cy="17" r="3" /><line x1="8.6" y1="8.6" x2="19" y2="19" /><line x1="8.6" y1="15.4" x2="19" y2="5" /></svg>
-                            </span>
-                        </div>
-                        <div class="col">
-                            <div class="font-weight-medium">{{ total_subproductos }}</div>
-                            <div class="text-secondary">Subproductos</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="col-sm-6 col-lg-2">
             <div class="card card-sm">
                 <div class="card-body">
@@ -162,102 +126,16 @@
               <th>STOCK</th>
               <th>MÍN/MÁX</th>
               <th>COSTO PROM.</th>
-              <th>TIPO</th>
               <th>ESTADO</th>
               <th class="w-1 text-center">ACCIONES</th>
             </tr>
           </thead>
-          <tbody>
-            {% for producto in productos %}
-            <tr>
-              <td><span class="text-muted">{{ producto.codigo }}</span></td>
-              <td>
-                <div class="d-flex py-1 align-items-center">
-                    {% if producto.imagen %}
-                        <span class="avatar me-2" style="background-image: url({{ producto.imagen.url }})"></span>
-                    {% else %}
-                        <span class="avatar me-2 bg-secondary-lt">{{ producto.nombre|slice:":2" }}</span>
-                    {% endif %}
-                    
-                    <div class="flex-fill">
-                        <div class="font-weight-medium">{{ producto.nombre }}</div>
-                        {% if producto.padre %}
-                            <div class="text-secondary"><small>De: {{ producto.padre.nombre }}</small></div>
-                        {% endif %}
-                    </div>
-                </div>
-              </td>
-              <td>{{ producto.categoria.nombre|default:"--" }}</td>
-              <td>
-                  {% if producto.stock <= producto.stock_minimo %}
-                    <span class="badge bg-red-lt">{{ producto.stock }} {{ producto.get_unidad_medida_display }}</span>
-                  {% else %}
-                    <span class="text-secondary">{{ producto.stock }} {{ producto.get_unidad_medida_display }}</span>
-                  {% endif %}
-              </td>
-              <td>
-                  <small class="text-secondary">{{ producto.stock_minimo|floatformat:0 }} / {{ producto.stock_maximo|default_if_none:"NA" }}</small>
-              </td>
-              <td>${{ producto.precio_costo }}</td>
-              <td>
-                  {% if producto.tipo == 'materia_prima' %}
-                    <span class="badge bg-azure-lt">Padre</span>
-                  {% elif producto.padre %}
-                    <span class="badge bg-indigo-lt">Hijo</span>
-                  {% else %}
-                    <span class="badge bg-secondary-lt">Normal</span>
-                  {% endif %}
-              </td>
-              <td>
-                  {% if producto.activo %}
-                    <span class="status status-green">Activo</span>
-                  {% else %}
-                    <span class="status status-grey">Inactivo</span>
-                  {% endif %}
-              </td>
-              <td class="text-center">
-                <div class="dropdown">
-                    <button class="btn dropdown-toggle align-text-top" 
-                            onclick="toggleAccionesProducto(event, this)"
-                            aria-expanded="false">
-                        Acciones
-                    </button>
-                    
-                    <div class="dropdown-menu dropdown-menu-end">
-                         <a class="dropdown-item" 
-                            href="#" 
-                            hx-get="{% url 'editar_producto' pk=producto.pk %}" 
-                            hx-target="#modal-container" 
-                            data-bs-toggle="modal">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-inline me-1" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 20h4l10.5 -10.5a1.5 1.5 0 0 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
-                            Editar
-                         </a>
-                         
-                         <a class="dropdown-item text-danger" href="#"
-                            hx-get="{% url 'eliminar_producto' pk=producto.pk %}" 
-                            hx-target="#modal-container" >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-inline me-1" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="4" y1="7" x2="20" y2="7" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
-                            Eliminar
-                         </a>
-                    </div>
-                </div>
-            </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="text-center py-5">
-                    <div class="empty">
-                        <div class="empty-img">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="48" height="48" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="12" cy="12" r="9" /><line x1="9" y1="10" x2="9.01" y2="10" /><line x1="15" y1="10" x2="15.01" y2="10" /><path d="M9.5 15.25a3.5 3.5 0 0 1 5 0" /></svg>
-                        </div>
-                        <p class="empty-title">No hay productos en el inventario</p>
-                        <p class="empty-subtitle text-secondary">
-                            Empieza creando tu primer producto o categoría.
-                        </p>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
+          <tbody id="tabla-productos" 
+                 hx-get="{% url 'productos_list' %}" 
+                 hx-trigger="productoActualizado from:body">
+             
+             {% include 'core/partials/producto_table_rows.html' %}
+             
           </tbody>
         </table>
       </div>

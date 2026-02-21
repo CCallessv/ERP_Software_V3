@@ -1,13 +1,16 @@
 from django.contrib import admin
-from .models import Categoria, Producto,Cliente
+# IMPORTANTE: Asegúrate de importar el nuevo modelo en la parte superior
+from .models import Categoria, Producto, PresentacionProducto 
 
-# Configuración para que la tabla de productos se vea profesional
+# Esto incrusta las conversiones dentro del formulario del Producto
+class PresentacionProductoInline(admin.TabularInline):
+    model = PresentacionProducto
+    extra = 1
+
+@admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('codigo', 'nombre', 'categoria', 'stock', 'precio_venta', 'tipo', 'activo')
-    search_fields = ('nombre', 'codigo') 
-    list_filter = ('categoria',)
-
-# ¡Esta es la parte clave! Registrar las tablas para que aparezcan
-admin.site.register(Cliente)
-admin.site.register(Categoria)
-admin.site.register(Producto, ProductoAdmin)
+    # Actualizado estrictamente con los campos que sobrevivieron a la purga
+    list_display = ('codigo', 'nombre', 'categoria', 'stock', 'unidad_medida_base', 'precio_costo', 'activo')
+    list_filter = ('categoria', 'activo', 'es_vendible', 'es_comprable')
+    search_fields = ('codigo', 'nombre')
+    inlines = [PresentacionProductoInline]

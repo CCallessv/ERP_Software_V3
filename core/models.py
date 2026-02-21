@@ -1,19 +1,5 @@
 from django.db import models
 
-# 1. Tabla de Categorias (Ej: Electronica, Muebles, Servicios)
-class Categoria(models.Model):
-    nombre = models.CharField(max_length=100, unique=True)
-    descripcion = models.TextField(blank=True, null=True) 
-    activo = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.nombre
-
-    class Meta:
-        verbose_name = "Categoría"
-        verbose_name_plural = "Categorías"
-# 2. Tabla de Clientes (Para ventas)
-
 class Cliente(models.Model):
     # Identificación
     codigo = models.CharField(max_length=20, unique=True, null=True, blank=True, verbose_name="Código Cliente") # Nuevo
@@ -55,63 +41,58 @@ class Cliente(models.Model):
         verbose_name = 'Cliente'
         verbose_name_plural = 'Clientes'
 #####################################################################################################
+class Categoria(models.Model):
+    nombre = models.CharField(max_length=100, unique=True, verbose_name="Nombre de la Categoría")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción")
+    estado = models.BooleanField(default=True, verbose_name="Activo")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Categoría"
+        verbose_name_plural = "Categorías"
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+###########################################################3
+
 class Producto(models.Model):
-    # Opciones
-    TIPO_CHOICES = [
-        ('materia_prima', ' Producto Padre (Materia Prima)'),
-        ('subproducto', ' Subproducto (Derivado)'),
-        ('producto', ' Producto Normal (Compra/Venta)'),
-        ('servicio', ' Servicio (Sin Stock)'),
-    ]
-    
-    UNIDAD_CHOICES = [
-        ('unidad', 'Unidad (Und)'),
-        ('libra', 'Libra (Lb)'),
+    # La unidad maestra. Todo el stock se cuenta matemáticamente en esta unidad.
+    UNIDADES_BASE = [
+        ('und', 'Unidad (Und)'),
+        ('lb', 'Libra (Lb)'),
+        ('oz', 'Onza (Oz)'),
         ('kg', 'Kilogramo (Kg)'),
-        ('metro', 'Metro (Mts)'),
-        ('litro', 'Litro (Lt)'),
+        ('lt', 'Litro (Lt)'),
+        ('gal', 'Galón (Gal)'),
+        ('mts', 'Metro (Mts)'),
     ]
 
-    #  Identificacion
+    # Identificación
     codigo = models.CharField(max_length=50, unique=True, verbose_name="Código / SKU")
     nombre = models.CharField(max_length=200, verbose_name="Nombre del Producto")
+    categoria = models.ForeignKey('Categoria', on_delete=models.PROTECT, related_name='productos', verbose_name="Categoría")
     
-    #  AQUI CONECTAMOS CON TU MODELO DE ARRIBA
-    categoria = models.ForeignKey(Categoria, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Categoría")
-
-    #  Clasificacion
-    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='producto', verbose_name="Tipo de Producto")
-    
-   
-    padre = models.ForeignKey(
-        'self', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='subproductos', 
-        verbose_name="Proviene de (Padre)"
-    )
-
-    # --- Inventario y Ubicación ---
-    unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES, default='unidad', verbose_name="Unidad")
+    # --- Inventario Base (Núcleo Matemático) ---
+    unidad_medida_base = models.CharField(max_length=10, choices=UNIDADES_BASE, default='und', verbose_name="Unidad Base")
     ubicacion = models.CharField(max_length=50, blank=True, null=True, verbose_name="Ubicación en Bodega")
     
     stock = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Stock Actual")
     stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=5.00, verbose_name="Stock Mínimo")
     stock_maximo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, default=None, verbose_name="Stock Máximo")
 
-    # --- Precios ---
-    precio_costo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Costo Promedio")
-    precio_venta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Precio de Venta")
+    # --- Precios Base ---
+    precio_costo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Costo Promedio (Unidad Base)")
+    precio_venta = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Precio Venta (Unidad Base)")
 
     # --- Control ---
-    es_vendible = models.BooleanField(default=True, verbose_name="¿Se vende en caja?")
+    es_vendible = models.BooleanField(default=True, verbose_name="¿Se vende al cliente?")
     es_comprable = models.BooleanField(default=True, verbose_name="¿Se compra a proveedores?")
     imagen = models.ImageField(upload_to='productos/', blank=True, null=True, verbose_name="Imagen")
     activo = models.BooleanField(default=True, verbose_name="¿Activo?")
     
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.nombre} ({self.codigo})"
@@ -120,6 +101,36 @@ class Producto(models.Model):
         verbose_name = "Producto"
         verbose_name_plural = "Inventario"
         ordering = ['nombre']
+
+
+class PresentacionProducto(models.Model):
+    """
+    Motor Multi-Unidad (UoM). 
+    Ejemplo: Producto = Crema (Base: Libra). 
+    Presentación 1 = "Botella", Factor = 1.5, Precio = $3.00
+    Presentación 2 = "Media Libra", Factor = 0.5, Precio = $1.00
+    """
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='presentaciones')
+    nombre = models.CharField(max_length=100, verbose_name="Nombre de Presentación", help_text="Ej: Botella, Caja x50, Media Libra")
+    codigo_barras = models.CharField(max_length=50, blank=True, null=True, unique=True, verbose_name="Código de Barras")
+    
+    # El eslabón matemático: Cuánto descuenta del stock maestro
+    factor_conversion = models.DecimalField(
+        max_digits=10, decimal_places=4, 
+        verbose_name="Equivalencia en Unidad Base",
+        help_text="¿Cuántas unidades base contiene o consume esta presentación?"
+    )
+    
+    # Te permite vender la botella más cara que si vendieras la libra suelta
+    precio_venta = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Específico")
+    activo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.nombre} de {self.producto.nombre}"
+
+    class Meta:
+        verbose_name = "Presentación"
+        verbose_name_plural = "Presentaciones"
 
 class Proveedor(models.Model):
     TIPO_PERSONA_CHOICES = [

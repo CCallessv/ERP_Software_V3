@@ -1,27 +1,30 @@
-<div class="modal modal-blur fade" id="modal-producto" tabindex="-1" style="display: block;">
-    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-      <div class="modal-content">
-        <div class="modal-body">
-          <div class="modal-title">¿Estás seguro?</div>
-          <div>
-              Vas a eliminar el producto <strong>{{ producto.nombre }}</strong>. 
-              Esta acción no se puede deshacer.
-          </div>
-        </div>
-        <div class="modal-footer">
-          
-          <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">
-              Cancelar
-          </button>
-  
-          <form hx-post="{% url 'eliminar_producto' producto.pk %}" method="POST">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-danger" data-bs-dismiss="modal">
-                  Sí, eliminar producto
-              </button>
-          </form>
-          
-        </div>
-      </div>
-    </div>
+<div class="modal-content">
+  <div class="modal-header bg-danger text-white">
+      <h5 class="modal-title">Dar de Baja Producto</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
   </div>
+  
+  <form hx-post="{% url 'eliminar_producto' pk=producto.pk %}" hx-target="#dialog">
+      {% csrf_token %}
+      <div class="modal-body text-center py-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+          <h3>¿Estás seguro?</h3>
+          <div class="text-secondary">
+              ¿Deseas dar de baja <strong>{{ producto.nombre }}</strong>?<br>
+              El producto dejará de estar disponible, pero se mantendrá en la base de datos por motivos de auditoría contable.
+          </div>
+      </div>
+      <div class="modal-footer">
+          <div class="w-100">
+              <div class="row">
+                  <div class="col">
+                      <a href="#" class="btn w-100" data-bs-dismiss="modal">Cancelar</a>
+                  </div>
+                  <div class="col">
+                      <button type="submit" class="btn btn-danger w-100">Desactivar</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+  </form>
+</div>

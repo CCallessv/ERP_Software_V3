@@ -112,6 +112,14 @@
                                 </span>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'categorias_list' %}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 4h6v6h-6z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6h-6z" /><path d="M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /></svg>
+                                </span>
+                                <span class="nav-link-title">Categorías</span>
+                            </a>
+                        </li>
                         <hr class="my-3">
 
                         <li class="nav-item">
@@ -220,6 +228,12 @@
                                     <span class="nav-link-title">Proveedores</span>
                                 </a>
                             </li>
+
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'categorias_list' %}">
+                                     <span class="nav-link-title">Categorías</span>
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -286,10 +300,12 @@
                     </div>
                 </div>
             </footer>
-            <div id="modal-container"></div>
+            <div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog">
+                    </div>
+            </div>
             
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-            <script src="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/js/tabler.min.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/js/tabler.min.js"></script>
             
             
@@ -299,5 +315,34 @@
             {% block scripts %}
             {% endblock %}
         
-</body>
+
+
+            
+            <script>
+                document.body.addEventListener('htmx:beforeSwap', function(evt) {
+                    // Si el servidor nos responde con éxito (204)
+                    if (evt.detail.xhr.status === 204) {
+                        
+                        // 1. Buscamos cualquier modal genérico que esté abierto en la pantalla
+                        var openModal = document.querySelector('.modal.show');
+                        if (openModal) {
+                            var modalInstance = bootstrap.Modal.getInstance(openModal);
+                            if (modalInstance) {
+                                modalInstance.hide();
+                            }
+                        }
+                        
+                        // 2. El "Limpiador": Forzamos la destrucción de la pantalla negra si Bootstrap se traba
+                        setTimeout(function() {
+                            document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+                                backdrop.remove(); // Matamos la capa oscura
+                            });
+                            document.body.classList.remove('modal-open'); // Desbloqueamos el scroll
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
+                        }, 250); // Le damos un cuarto de segundo a la animación antes de forzar el cierre
+                    }
+                });
+            </script>
+            </body>
     </html>

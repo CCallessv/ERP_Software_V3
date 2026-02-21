@@ -1,6 +1,6 @@
 from django import forms
 import re
-from .models import Cliente, Producto, Proveedor
+from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto
 #Django necesita saber cómo validar los datos antes de guardarlos entonces Vamos a crear un archivo para "traducir" el modelo a HTML.
 class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario que vamos a usar en la vista
     class Meta: # Meta es un diccionario que contiene la configuración del formulario
@@ -24,35 +24,28 @@ class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario qu
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
-        fields = ['codigo', 'nombre', 'categoria', 'tipo', 'unidad_medida', 'padre', 'stock', 'stock_minimo', 'stock_maximo', 'precio_costo', 'precio_venta', 'es_vendible', 'es_comprable', 'ubicacion', 'activo', 'imagen']
+        fields = [
+            'nombre', 'categoria', 'unidad_medida_base', 
+            'ubicacion', 'stock', 'stock_minimo', 'stock_maximo',
+            'precio_costo', 'precio_venta', 'es_vendible', 
+            'es_comprable', 'imagen', 'activo'
+        ]
         
-        widgets = {
-            'tipo': forms.HiddenInput(), 
-            'codigo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: PROD-001'}),
-            'nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombre del producto'}),
-            'categoria': forms.Select(attrs={'class': 'form-select'}),
-            'unidad_medida': forms.Select(attrs={'class': 'form-select'}),
-            'padre': forms.Select(attrs={'class': 'form-select'}),
-            'stock': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0'}),
-            'stock_minimo': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '5'}),
-            'stock_maximo': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '100'}),
-            'precio_costo': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
-            'precio_venta': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
-            'ubicacion': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: A-01-01'}),
-            'es_vendible': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'es_comprable': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtramos para que en "Padre" solo salgan materias primas
-        self.fields['padre'].queryset = Producto.objects.filter(tipo='materia_prima')        
+        
+        # Inyectar clases de Bootstrap a todos los campos
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+                
+        # BLOQUEO EMPRESARIAL: El stock inicial no se puede manipular
+        self.fields['stock'].widget.attrs['readonly'] = True
+        self.fields['stock'].initial = 0.00
+        self.fields['stock'].help_text = "Bloqueado. El stock se gestiona vía compras o ajustes."  
 
-# forms.py
-from django import forms
-from .models import Proveedor
-import re
 
 class ProveedorForm(forms.ModelForm):
     class Meta:
@@ -96,3 +89,43 @@ class ProveedorForm(forms.ModelForm):
         if nrc and '-' not in nrc:
              raise forms.ValidationError("El NRC (Registro de IVA) debe incluir el guion verificador.")
         return nrc    
+
+class CategoriaForm(forms.ModelForm):
+    class Meta:
+        model = Categoria
+        fields = ['nombre', 'descripcion', 'estado']
+        widgets = {
+            'nombre': forms.TextInput(attrs={
+                'class': 'form-control', 
+                'placeholder': 'Ej. Lácteos, Electrónica...'
+            }),
+            'descripcion': forms.Textarea(attrs={
+                'class': 'form-control', 
+                'rows': 3, 
+                'placeholder': 'Breve descripción de la categoría (Opcional)'
+            }),
+            'estado': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+class PresentacionForm(forms.ModelForm):
+    class Meta:
+        model = PresentacionProducto
+        fields = ['nombre', 'codigo_barras', 'factor_conversion', 'precio_venta']
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        for field_name, field in self.fields.items():
+            field.widget.attrs['class'] = 'form-control'
+            
+        # Forzar que el factor de conversión no pueda ser menor a 0.0001
+        self.fields['factor_conversion'].widget.attrs.update({
+            'min': '0.0001', 
+            'step': '0.0001'
+        })
+        self.fields['precio_venta'].widget.attrs.update({
+            'min': '0.00', 
+            'step': '0.01'
+        })

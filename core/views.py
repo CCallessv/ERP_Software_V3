@@ -1,12 +1,11 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from .models import Producto, Categoria, Cliente, Proveedor
+from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto
 from django.shortcuts import render, redirect, get_object_or_404 
 from django.contrib.auth import logout
-from .forms import ClienteForm 
 from django.db.models import Q, Sum, F
 from django.core.paginator import Paginator
-from .forms import ProductoForm, ProveedorForm
+from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm
 from django.http import HttpResponse
 from django.urls import reverse
 @login_required
@@ -114,17 +113,12 @@ def clientes_list(request):
 
 
 def productos_list(request):
-   
     # BASE DE DATOS: IGNORAR LOS ELIMINADOS
-    # ==========================================
-    # Esta es la base que usaremos para TODO el calculo
     productos_activos = Producto.objects.filter(activo=True)
 
-   
     # 1. LOGICA DE LA TABLA (Busqueda y Filtros)
-    # ==========================================
-    # Usamos nuestra base de activos 
-    queryset = productos_activos.select_related('categoria', 'padre').order_by('-id')
+    # ELIMINAMOS 'padre' de select_related porque ya no existe
+    queryset = productos_activos.select_related('categoria').order_by('-id')
 
     search_query = request.GET.get('q', '')
     if search_query:
@@ -137,16 +131,10 @@ def productos_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ==========================================
     # 2. LOGICA DEL DASHBOARD 
-    # ==========================================
-    # Todo debe calcularse usando productos_activos
-    
     total_productos = productos_activos.count()
     
-    total_padres = productos_activos.filter(tipo='materia_prima').count()
-    total_subproductos = productos_activos.filter(tipo='subproducto').count()
-    
+    # ELIMINADOS: total_padres y total_subproductos
     stock_bajo = productos_activos.filter(stock__lte=F('stock_minimo')).count()
     
     data_valor = productos_activos.aggregate(total=Sum(F('stock') * F('precio_costo')))
@@ -156,91 +144,83 @@ def productos_list(request):
         'productos': page_obj, 
         'page_obj': page_obj, 
         'search_query': search_query,
-        
         'total_productos': total_productos,
-        'total_padres': total_padres,
-        'total_subproductos': total_subproductos,
         'stock_bajo': stock_bajo,
         'valor_total': valor_total,
     }
 
-    return render(request, 'core/productos_list.html', context) 
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/producto_table_rows.html', context)
+
+    return render(request, 'core/productos_list.html', context)
+
 
 def crear_producto(request):
     if request.method == 'POST':
+        # IMPORTANTE: request.FILES es obligatorio porque tu modelo tiene imágenes
         form = ProductoForm(request.POST, request.FILES)
+        
         if form.is_valid():
-            form.save()
-            if request.headers.get('HX-Request'):
-                 return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
-            return redirect('productos_list')
+            # 1. Pausamos el guardado
+            producto = form.save(commit=False)
+            
+            # 2. Generación automática del código (Estándar ERP)
+            ultimo_producto = Producto.objects.order_by('-id').first()
+            if ultimo_producto:
+                nuevo_numero = ultimo_producto.id + 1
+            else:
+                nuevo_numero = 1
+            producto.codigo = f"PROD-{nuevo_numero:04d}"
+            
+            # 3. Guardamos en la base de datos
+            producto.save()
+            
+            # 4. Éxito: disparamos el evento para la tabla de productos
+            response = HttpResponse(status=204)
+            response['HX-Trigger'] = 'productoActualizado'
+            return response
+        else:
+            print("❌ ERRORES DE PRODUCTO:", form.errors)
     else:
         form = ProductoForm()
 
-    context = {
-        'form': form,
-        'titulo_modal': 'Nuevo Producto', 
-        'url_post': reverse('crear_producto') 
-    }
-    return render(request, 'core/partials/producto_form.html', context)
+    return render(request, 'core/partials/producto_form.html', {'form': form, 'titulo_modal': 'Nuevo Producto'})
 
 
 
 def editar_producto(request, pk):
-    # Buscamos el producto o devolvemos error 404 si no existe
     producto = get_object_or_404(Producto, pk=pk)
-
+    
     if request.method == 'POST':
-        # instance=producto es la CLAVE: le dice a Django que estamos actualizando
+        # IMPORTANTE: request.FILES para mantener la imagen
         form = ProductoForm(request.POST, request.FILES, instance=producto)
-        
         if form.is_valid():
             form.save()
-            if request.headers.get('HX-Request'):
-                 return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
-            return redirect('productos_list')
+            response = HttpResponse(status=204)
+            response['HX-Trigger'] = 'productoActualizado'
+            return response
     else:
-        # Pre-llenamos el formulario con los datos actuales
         form = ProductoForm(instance=producto)
-
-    context = {
-        'form': form,
-        'titulo_modal': f'Editar {producto.nombre}', 
-        'url_post': reverse('editar_producto', args=[pk]) # A donde enviar (con ID)
-    }
-    return render(request, 'core/partials/producto_form.html', context)
+        
+    return render(request, 'core/partials/producto_form.html', {
+        'form': form, 
+        'titulo_modal': f'Editar: {producto.codigo}'
+    })
 
 
 def eliminar_producto(request, pk):
-    # Usamos el manager por defecto para encontrarlo aunque ya esté inactivo
-    # por si acaso se accede por URL directa.
-    producto = get_object_or_404(Producto.objects.all(), pk=pk)
-
+    producto = get_object_or_404(Producto, pk=pk)
+    
     if request.method == 'POST':
-        # 1. Inactivar al producto principal
+        # SOFT DELETE: Protegemos el historial financiero
         producto.activo = False
         producto.save()
-
-        # 2. SI ES UN PADRE: Buscar a sus hijos activos y apagarlos
-        # (Revisa que el related_name en tu modelo sea 'subproductos',
-        #  si no, cámbialo por el nombre correcto que usaste en el ForeignKey)
-        if producto.tipo == 'materia_prima':
-            hijos_activos = producto.subproductos.filter(activo=True)
-            count = hijos_activos.count()
-            if count > 0:
-                print(f"Se inactivaron {count} subproductos hijos de {producto.nombre}")
-                # update() es más eficiente que un bucle for para esto
-                hijos_activos.update(activo=False)
         
-        # Avisamos a HTMX que refresque
-        return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
-
-    context = {
-        'producto': producto
-    }
-    # Asegúrate de usar el template correcto para la confirmación
-    return render(request, 'core/partials/producto_confirm_delete.html', context)
-
+        response = HttpResponse(status=204)
+        response['HX-Trigger'] = 'productoActualizado'
+        return response
+        
+    return render(request, 'core/partials/producto_confirm_delete.html', {'producto': producto})
 
 
 
@@ -322,3 +302,107 @@ def eliminar_proveedor(request, pk):
         
     # Si es GET, devolvemos el modal de confirmación
     return render(request, 'core/partials/proveedor_confirm_delete.html', {'proveedor': proveedor})
+
+# ==========================================
+# MÓDULO DE CATEGORÍAS
+# ==========================================
+
+def categorias_list(request):
+    busqueda = request.GET.get('q', '')
+    
+    # Filtramos categorias activas (estado=True)
+    categorias = Categoria.objects.filter(estado=True).order_by('nombre')
+    
+    if busqueda:
+        categorias = categorias.filter(
+            Q(nombre__icontains=busqueda) |
+            Q(descripcion__icontains=busqueda)
+        )
+
+    # Paginación
+    paginator = Paginator(categorias, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'categorias': page_obj,
+        'page_obj': page_obj,
+        'search_query': busqueda,
+        'total_categorias': Categoria.objects.filter(estado=True).count(),
+    }
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'core/partials/categoria_table_rows.html', context)
+        
+    return render(request, 'core/categorias_list.html', context)
+
+def crear_categoria(request):
+    if request.method == 'POST':
+        form = CategoriaForm(request.POST)
+        if form.is_valid():
+            categoria = form.save(commit=False)
+            categoria.estado = True 
+            categoria.save()
+            
+            response = HttpResponse(status=204)
+            response['HX-Trigger'] = 'categoriaActualizada'
+            return response
+        else:
+            print("❌ ERRORES DE VALIDACIÓN:", form.errors)
+    else:
+        form = CategoriaForm()
+
+    return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Nueva Categoría'})
+
+
+def editar_categoria(request, pk):
+    categoria = get_object_or_404(Categoria, pk=pk)
+    
+    if request.method == 'POST':
+        form = CategoriaForm(request.POST, instance=categoria)
+        if form.is_valid():
+            form.save()
+            response = HttpResponse(status=204)
+            response['HX-Trigger'] = 'categoriaActualizada'
+            return response
+    else:
+        form = CategoriaForm(instance=categoria)
+
+    return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Editar Categoría', 'categoria': categoria})
+
+
+def eliminar_categoria(request, pk):
+    categoria = get_object_or_404(Categoria, pk=pk)
+    
+    if request.method == 'POST':
+        # Soft delete: la ocultamos en lugar de borrarla
+        categoria.estado = False
+        categoria.save()
+        
+        response = HttpResponse(status=204)
+        response['HX-Trigger'] = 'categoriaActualizada'
+        return response
+        
+    return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})    
+
+def gestionar_presentaciones(request, pk):
+    producto = get_object_or_404(Producto, pk=pk)
+    # Solo traemos las presentaciones activas
+    presentaciones = producto.presentaciones.filter(activo=True)
+    
+    if request.method == 'POST':
+        form = PresentacionForm(request.POST)
+        if form.is_valid():
+            nueva_presentacion = form.save(commit=False)
+            nueva_presentacion.producto = producto
+            nueva_presentacion.save()
+            # Limpiamos el formulario después de guardar para agregar otra
+            form = PresentacionForm() 
+    else:
+        form = PresentacionForm()
+        
+    return render(request, 'core/partials/presentaciones_modal.html', {
+        'producto': producto,
+        'presentaciones': presentaciones,
+        'form': form
+    })

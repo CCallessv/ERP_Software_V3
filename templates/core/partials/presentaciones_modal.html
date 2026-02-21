@@ -1,0 +1,67 @@
+<div class="modal-content">
+    <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">
+            Presentaciones: {{ producto.nombre }} 
+            <span class="badge bg-blue ms-2">Base: {{ producto.get_unidad_medida_base_display }}</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    
+    <div class="modal-body">
+        <form hx-post="{% url 'gestionar_presentaciones' pk=producto.pk %}" hx-target="#dialog" autocomplete="off" class="mb-4 p-3 border rounded">
+            {% csrf_token %}
+            <h4 class="mb-3">Agregar Nueva Equivalencia</h4>
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small required">Nombre (Ej: Botella)</label>
+                    {{ form.nombre }}
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small required">Equivale a: ({{ producto.get_unidad_medida_base_display }})</label>
+                    {{ form.factor_conversion }}
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label small required">Precio Venta</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        {{ form.precio_venta }}
+                    </div>
+                </div>
+                <div class="col-md-8 mb-2">
+                    <label class="form-label small">Código de Barras (Opcional)</label>
+                    {{ form.codigo_barras }}
+                </div>
+                <div class="col-md-4 mb-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Guardar</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-vcenter table-sm">
+                <thead>
+                    <tr>
+                        <th>Presentación</th>
+                        <th>Factor ({{ producto.unidad_medida_base }})</th>
+                        <th>Precio</th>
+                        <th>Barcode</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in presentaciones %}
+                    <tr>
+                        <td class="fw-bold">{{ p.nombre }}</td>
+                        <td>{{ p.factor_conversion|floatformat:4 }}</td>
+                        <td>${{ p.precio_venta }}</td>
+                        <td class="text-secondary">{{ p.codigo_barras|default:"--" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-3">No hay presentaciones registradas. Solo se puede vender la unidad base.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

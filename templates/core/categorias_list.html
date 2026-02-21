@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header d-print-none">
+        <div class="row align-items-center">
+            <div class="col">
+                <h2 class="page-title">
+                    Categorías de Productos
+                </h2>
+                <div class="text-muted mt-1">{{ total_categorias }} categorías activas</div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <div class="d-flex">
+                    <button class="btn btn-primary" 
+                            hx-get="{% url 'crear_categoria' %}" 
+                            hx-target="#dialog" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#modal-generic">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Nueva Categoría
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-body">
+        <div class="card">
+            <div class="card-body border-bottom py-3">
+                <div class="d-flex">
+                    <div class="ms-auto text-muted">
+                        Buscar:
+                        <div class="ms-2 d-inline-block">
+                            <input type="text" 
+                                   class="form-control form-control-sm" 
+                                   name="q" 
+                                   value="{{ search_query }}"
+                                   placeholder="Nombre o descripción..."
+                                   hx-get="{% url 'categorias_list' %}"
+                                   hx-trigger="keyup changed delay:500ms"
+                                   hx-target="#tabla-categorias">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tabla-categorias" 
+                 hx-get="{% url 'categorias_list' %}" 
+                 hx-trigger="categoriaActualizada from:body">
+                {% include 'core/partials/categoria_table_rows.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

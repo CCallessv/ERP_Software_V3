@@ -1,0 +1,35 @@
+<div class="modal-content">
+    <div class="modal-header">
+        <h5 class="modal-title">Nueva Categoría</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    
+    <form hx-post="{{ request.path }}" autocomplete="off" hx-target="#dialog">
+        {% csrf_token %}
+        
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label required">Nombre de la Categoría</label>
+                {{ form.nombre }}
+                {% if form.nombre.errors %}
+                    <div class="text-danger small mt-1 fw-bold">{{ form.nombre.errors.0 }}</div>
+                {% endif %}
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Descripción</label>
+                {{ form.descripcion }}
+                {% if form.descripcion.errors %}
+                    <div class="text-danger small mt-1 fw-bold">{{ form.descripcion.errors.0 }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <a href="#" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</a>
+            <button type="submit" class="btn btn-primary ms-auto">
+                Guardar Categoría
+            </button>
+        </div>
+    </form>
+</div>
