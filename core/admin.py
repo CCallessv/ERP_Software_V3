@@ -1,6 +1,6 @@
 from django.contrib import admin
 # IMPORTANTE: Asegúrate de importar el nuevo modelo en la parte superior
-from .models import Categoria, Producto, PresentacionProducto 
+from .models import Categoria, Producto, PresentacionProducto, MovimientoInventario 
 
 # Esto incrusta las conversiones dentro del formulario del Producto
 class PresentacionProductoInline(admin.TabularInline):
@@ -14,3 +14,6 @@ class ProductoAdmin(admin.ModelAdmin):
     list_filter = ('categoria', 'activo', 'es_vendible', 'es_comprable')
     search_fields = ('codigo', 'nombre')
     inlines = [PresentacionProductoInline]
+
+
+admin.site.register(MovimientoInventario)    

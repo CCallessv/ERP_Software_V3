@@ -1,4 +1,6 @@
 from django.db import models
+from django.contrib.auth.models import User
+from django.db import transaction
 
 class Cliente(models.Model):
     # Identificación
@@ -182,4 +184,84 @@ class Proveedor(models.Model):
         verbose_name = "Proveedor"
         verbose_name_plural = "Proveedores"
 
+class MovimientoInventario(models.Model):
+    TIPO_MOVIMIENTO = [
+        # Entradas (Suman)
+        ('entrada_compra', 'Entrada por Compra'),
+        ('ajuste_entrada', 'Ajuste de Entrada (Positivo)'),
+        # Salidas (Restan)
+        ('salida_venta', 'Salida por Venta'),
+        ('ajuste_salida', 'Ajuste de Salida (Merma/Daño)'),
+    ]
+
+    producto = models.ForeignKey('Producto', on_delete=models.PROTECT, related_name='movimientos')
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name="Fecha y Hora")
+    tipo = models.CharField(max_length=20, choices=TIPO_MOVIMIENTO, verbose_name="Tipo de Movimiento")
+    
+    # --- Matemáticas del Movimiento ---
+    # Siempre se registra en la Unidad Base (ej. Libras, no Botellas)
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Cantidad Movida")
+    costo_unitario = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Unitario (Histórico)")
+    
+    # --- El Seguro contra Colapsos (Snapshot) ---
+    saldo_cantidad = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        blank=True, null=True,
+        verbose_name="Stock Resultante",
+        help_text="Fotografía del stock exacto DESPUÉS de este movimiento"
+    )
+    
+    # --- Auditoría ---
+    referencia = models.CharField(max_length=100, blank=True, null=True, verbose_name="Documento Respaldo", help_text="Ej: Factura #1234, Doc Ajuste #001")
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Registrado por")
+    notas = models.TextField(blank=True, null=True, verbose_name="Justificación")
+
+    class Meta:
+        verbose_name = "Movimiento de Kardex"
+        verbose_name_plural = "Kardex de Inventario"
+        ordering = ['-fecha'] # Siempre muestra el más reciente primero
+
+    def __str__(self):
+        return f"{self.producto.codigo} | {self.get_tipo_display()} | {self.cantidad}"        
+
+    def save(self, *args, **kwargs):
+        # REGLA ERP: La matemática solo se ejecuta cuando el movimiento es NUEVO.
+        # Los movimientos históricos son inmutables.
+        if not self.pk:
+            # TRANSACCIÓN ATÓMICA: Si algo falla aquí, la base de datos revierte todo
+            with transaction.atomic():
+                # select_for_update() bloquea la fila del producto. 
+                # Si dos cajeros venden al mismo milisegundo, uno espera al otro.
+                producto = Producto.objects.select_for_update().get(pk=self.producto.pk)
+
+                if self.tipo in ['entrada_compra', 'ajuste_entrada']:
+                    # 1. Calcular el Costo Promedio Ponderado
+                    if self.cantidad > 0:
+                        valor_inventario_actual = producto.stock * producto.precio_costo
+                        valor_nuevo_ingreso = self.cantidad * self.costo_unitario
+                        nuevo_stock = producto.stock + self.cantidad
+                        
+                        # Evitar la división por cero matemática
+                        if nuevo_stock > 0:
+                            producto.precio_costo = (valor_inventario_actual + valor_nuevo_ingreso) / nuevo_stock
+
+                    # 2. Sumar el stock
+                    producto.stock += self.cantidad
+
+                elif self.tipo in ['salida_venta', 'ajuste_salida']:
+                    # Validar fraude o error de digitación
+                    if producto.stock < self.cantidad:
+                        raise ValueError(f"Error Crítico: Intento de dejar el stock en negativo para {producto.nombre}.")
+                    
+                    # 2. Restar el stock
+                    producto.stock -= self.cantidad
+
+                # 3. Tomar la fotografía financiera (Saldo)
+                self.saldo_cantidad = producto.stock
+
+                # 4. Guardar el producto modificado
+                producto.save()
+
+        # 5. Finalmente, guardar este movimiento en el historial
+        super().save(*args, **kwargs)
 
