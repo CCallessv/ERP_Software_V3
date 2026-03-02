@@ -1,6 +1,6 @@
 from django import forms
 import re
-from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto
+from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto, Compra
 #Django necesita saber cómo validar los datos antes de guardarlos entonces Vamos a crear un archivo para "traducir" el modelo a HTML.
 class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario que vamos a usar en la vista
     class Meta: # Meta es un diccionario que contiene la configuración del formulario
@@ -129,3 +129,20 @@ class PresentacionForm(forms.ModelForm):
             'min': '0.00', 
             'step': '0.01'
         })
+
+class CompraForm(forms.ModelForm):
+    class Meta:
+        model = Compra
+        fields = ['proveedor', 'fecha_compra', 'tipo_comprobante', 'numero_comprobante']
+        widgets = {
+            'fecha_compra': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'proveedor': forms.Select(attrs={'class': 'form-select'}),
+            'tipo_comprobante': forms.Select(attrs={'class': 'form-select'}),
+            'numero_comprobante': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. 0001-00000456'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtramos para que solo salgan proveedores activos
+        from .models import Proveedor
+        self.fields['proveedor'].queryset = Proveedor.objects.filter(activo=True)        

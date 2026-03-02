@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path
 from django.contrib.auth import views as auth_views 
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
-from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones
+from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -50,8 +50,9 @@ urlpatterns = [
     path('categorias/crear/', crear_categoria, name='crear_categoria'),
     path('categorias/editar/<int:pk>/', editar_categoria, name='editar_categoria'),
     path('categorias/eliminar/<int:pk>/', eliminar_categoria, name='eliminar_categoria'),
-    #Aca se gestionara lo son las presentaciones de cada producto
-    path('inventario/presentaciones/<int:pk>/', gestionar_presentaciones, name='gestionar_presentaciones')
+    #Aca se gestionara lo q son las presentaciones de cada producto
+    path('inventario/presentaciones/<int:pk>/', gestionar_presentaciones, name='gestionar_presentaciones'),
+    path('compras/nueva/', crear_compra, name='crear_compra'),
    
     
     

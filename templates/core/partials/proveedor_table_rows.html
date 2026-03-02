@@ -40,12 +40,16 @@
     <td class="text-end">
         <button class="btn btn-sm btn-outline-primary" 
                 hx-get="{% url 'proveedor_editar' proveedor.pk %}" 
-                hx-target="#modal-container">
+                hx-target="#dialog"
+                data-bs-toggle="modal"
+                data-bs-target="#modal-generic">
             Editar
         </button>
         <button class="btn btn-sm btn-outline-danger ms-1"
                 hx-get="{% url 'eliminar_proveedor' proveedor.pk %}"
-                hx-target="#modal-container">
+                hx-target="#dialog"
+                data-bs-toggle="modal"
+                data-bs-target="#modal-generic">
             Eliminar
         </button>
     </td>

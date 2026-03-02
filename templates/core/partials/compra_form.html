@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header d-print-none text-white">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Registrar Nueva Compra</h2>
+                <div class="text-muted mt-1">Fase 1: Datos del Documento</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Cabecera de Factura/CCF</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" autocomplete="off">
+                            {% csrf_token %}
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label required">Proveedor</label>
+                                    {{ form.proveedor }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label required">Fecha de Compra</label>
+                                    {{ form.fecha_compra }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label required">Tipo de Documento</label>
+                                    {{ form.tipo_comprobante }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label required">Número de Comprobante</label>
+                                    {{ form.numero_comprobante }}
+                                </div>
+                            </div>
+                            <div class="form-footer text-end mt-4">
+                                <a href="{% url 'productos_list' %}" class="btn btn-link">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">Guardar Cabecera y Continuar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

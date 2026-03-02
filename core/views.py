@@ -1,11 +1,11 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto
+from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto, Compra
 from django.shortcuts import render, redirect, get_object_or_404 
 from django.contrib.auth import logout
 from django.db.models import Q, Sum, F
 from django.core.paginator import Paginator
-from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm
+from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm,CompraForm
 from django.http import HttpResponse
 from django.urls import reverse
 @login_required
@@ -277,7 +277,7 @@ def proveedor_editar(request, pk):
     proveedor = get_object_or_404(Proveedor, pk=pk)
     if request.method == 'POST':
         form = ProveedorForm(request.POST, instance=proveedor)
-        if form.validate():
+        if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
             response['HX-Trigger'] = 'proveedorActualizado'
@@ -406,3 +406,40 @@ def gestionar_presentaciones(request, pk):
         'presentaciones': presentaciones,
         'form': form
     })
+
+@login_required
+def crear_compra(request):
+    if request.method == 'POST':
+        form = CompraForm(request.POST)
+        if form.is_valid():
+            # Pausamos el guardado para inyectar datos de auditoria
+            nueva_compra = form.save(commit=False)
+            nueva_compra.usuario = request.user
+            nueva_compra.estado = 'borrador' # Forzamos el estado inicial
+            nueva_compra.save()
+            
+            # El siguiente paso logico sera redirigir a la pantalla de agregar productos
+            # Por ahora, lo mandaremos temporalmente al panel principal hasta que hagamos esa vista
+            return redirect('productos_list') 
+    else:
+        form = CompraForm()
+
+    return render(request, 'core/partials/compra_form.html', {'form': form})    
+
+@login_required
+def compra_detalle(request, pk):
+    # Traemos la cabecera de la compra
+    compra = get_object_or_404(Compra, pk=pk)
+    
+    # Traemos las líneas de detalle que ya tenga esta compra
+    detalles = DetalleCompra.objects.filter(compra=compra)
+    
+    # Instanciamos el formulario vacío para agregar más productos
+    form = DetalleCompraForm()
+    
+    context = {
+        'compra': compra,
+        'detalles': detalles,
+        'form': form,
+    }
+    return render(request, 'core/partials/compra_detalle.html', context)

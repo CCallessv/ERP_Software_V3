@@ -9,7 +9,11 @@
                 <div class="text-secondary mt-1">Gestiona tus fuentes de suministro y condiciones de crédito.</div>
             </div>
             <div class="col-auto ms-auto d-print-none">
-                <button class="btn btn-primary" hx-get="{% url 'proveedor_crear' %}" hx-target="#modal-container">
+                <button class="btn btn-primary" 
+                        hx-get="{% url 'proveedor_crear' %}" 
+                        hx-target="#dialog" 
+                        data-bs-toggle="modal"
+                        data-bs-target="#modal-generic">
                     <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
                     Nuevo Proveedor
                 </button>
@@ -29,7 +33,14 @@
                                 <span class="bg-primary text-white avatar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /></svg></span>
                             </div>
                             <div class="col">
-                                <div class="font-weight-medium">{{ total_proveedores }} Proveedores</div>
+                                <div id="contador-proveedores" 
+                                    hx-get="{% url 'proveedor_list' %}" 
+                                    hx-select="#contador-proveedores" 
+                                    hx-swap="outerHTML" 
+                                    hx-trigger="proveedorActualizado from:body"
+                                    class="text-white font-weight-bold">
+                                    {{ proveedores|length }} Proveedores
+                                </div>
                                 <div class="text-secondary">Activos en el sistema</div>
                             </div>
                         </div>
@@ -75,8 +86,8 @@
         </div>
     </div> 
 </div>
-
-{% endblock %}  {% block scripts %}
-    {{ block.super }}
-    <script src="{% static 'js/modal_proveedores_handler.js' %}"></script>
-{% endblock %}
+<div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog">
+        </div>
+</div>
+{% endblock %} 

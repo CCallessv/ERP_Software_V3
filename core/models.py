@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.utils import timezone
 
 class Cliente(models.Model):
     # Identificación
@@ -103,7 +104,7 @@ class Producto(models.Model):
         verbose_name = "Producto"
         verbose_name_plural = "Inventario"
         ordering = ['nombre']
-
+#############################################################################3
 
 class PresentacionProducto(models.Model):
     """
@@ -134,6 +135,7 @@ class PresentacionProducto(models.Model):
         verbose_name = "Presentación"
         verbose_name_plural = "Presentaciones"
 
+##########################################################
 class Proveedor(models.Model):
     TIPO_PERSONA_CHOICES = [
         ('natural', 'Persona Natural'),
@@ -184,6 +186,7 @@ class Proveedor(models.Model):
         verbose_name = "Proveedor"
         verbose_name_plural = "Proveedores"
 
+#######################################################################3
 class MovimientoInventario(models.Model):
     TIPO_MOVIMIENTO = [
         # Entradas (Suman)
@@ -264,4 +267,54 @@ class MovimientoInventario(models.Model):
 
         # 5. Finalmente, guardar este movimiento en el historial
         super().save(*args, **kwargs)
+#########################################################################
+class Compra(models.Model):
+    ESTADO_COMPRA = [
+        ('borrador', 'Borrador (No afecta stock)'),
+        ('completada', 'Completada (Stock actualizado)'),
+        ('anulada', 'Anulada (Stock revertido)'),
+    ]
+    
+    TIPO_COMPROBANTE = [
+        ('ccf', 'Comprobante de Crédito Fiscal (CCF)'),
+        ('factura', 'Factura de Consumidor Final'),
+        ('recibo', 'Recibo / Otro'),
+    ]
 
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name='compras')
+    fecha_compra = models.DateField(default=timezone.now, verbose_name="Fecha de Compra")
+    tipo_comprobante = models.CharField(max_length=20, choices=TIPO_COMPROBANTE, default='ccf')
+    numero_comprobante = models.CharField(max_length=50, verbose_name="Número de Documento")
+    
+    estado = models.CharField(max_length=20, choices=ESTADO_COMPRA, default='borrador')
+    
+    # Totales del documento
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    impuestos = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_compra', '-id']
+
+    def __str__(self):
+        return f"Compra {self.numero_comprobante} - {self.proveedor.nombre_empresa}"
+
+##############################################################################
+class DetalleCompra(models.Model):
+    compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='detalles')
+    producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
+    
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Unitario")
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def save(self, *args, **kwargs):
+        # REGLA: El subtotal lo calcula la máquina, no el humano, para evitar fraude.
+        self.subtotal = self.cantidad * self.precio_unitario
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.cantidad} x {self.producto.nombre}"
