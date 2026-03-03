@@ -1,13 +1,14 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto, Compra
+from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto, Compra, DetalleCompra
 from django.shortcuts import render, redirect, get_object_or_404 
 from django.contrib.auth import logout
 from django.db.models import Q, Sum, F
 from django.core.paginator import Paginator
-from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm,CompraForm
+from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm,CompraForm, DetalleCompraForm
 from django.http import HttpResponse
 from django.urls import reverse
+from decimal import Decimal
 @login_required
 def home(request):
     # Contamos cuántos productos y categorías hay en la BD real
@@ -420,7 +421,7 @@ def crear_compra(request):
             
             # El siguiente paso logico sera redirigir a la pantalla de agregar productos
             # Por ahora, lo mandaremos temporalmente al panel principal hasta que hagamos esa vista
-            return redirect('productos_list') 
+            return redirect('compra_detalle', pk=nueva_compra.pk)
     else:
         form = CompraForm()
 
@@ -443,3 +444,42 @@ def compra_detalle(request, pk):
         'form': form,
     }
     return render(request, 'core/partials/compra_detalle.html', context)
+
+@login_required
+def detalle_compra_crear(request, compra_id):
+    # 1. Traemos la factura en la que estamos trabajando
+    compra = get_object_or_404(Compra, pk=compra_id)
+    
+    if request.method == 'POST':
+        form = DetalleCompraForm(request.POST)
+        if form.is_valid():
+            # 2. Pausamos el guardado para inyectar datos calculados
+            detalle = form.save(commit=False)
+            detalle.compra = compra
+            
+            # 3. Calculamos el subtotal de esta línea (Cantidad x Precio)
+            detalle.subtotal = detalle.cantidad * detalle.precio_unitario
+            detalle.save()
+            
+            # 4. Recalculamos el total general de la factura y lo forzamos a 2 decimales estrictos
+            total_calculado = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
+            
+            # Limpiamos la basura de coma flotante de SQLite antes de guardar
+            compra.total = Decimal(str(total_calculado)).quantize(Decimal('0.01'))
+            compra.save()
+    # 5. Preparamos los datos frescos para devolverle a HTMX
+    detalles = DetalleCompra.objects.filter(compra=compra)
+    form_limpio = DetalleCompraForm() # Mandamos un formulario vacío para el siguiente lácteo
+    
+    context = {
+        'compra': compra,
+        'detalles': detalles,
+        'form': form_limpio,
+    }
+    
+    # HTMX recibe esto y reemplaza el contenedor
+    return render(request, 'core/partials/compra_detalle.html', context)
+
+@login_required
+def detalle_compra_eliminar(request, detalle_id):
+    pass

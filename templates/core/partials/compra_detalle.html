@@ -1,0 +1,103 @@
+{% extends 'base.html' %} {% block content %}
+<div id="compra-detalle-container" class="container-xl">
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">Documento en Borrador: {{ compra.numero_comprobante }}</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="text-secondary mb-1">Proveedor</div>
+                    <div class="font-weight-medium">{{ compra.proveedor.nombre_comercial }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary mb-1">Tipo y Fecha</div>
+                    <div class="font-weight-medium">{{ compra.get_tipo_comprobante_display }} | {{ compra.fecha_compra }}</div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="text-secondary mb-1">Total Factura</div>
+                    <h2 class="m-0 text-green">${{ compra.total|default:"0.00"|floatformat:2 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form hx-post="{% url 'detalle_compra_crear' compra.pk %}"
+                hx-target="#compra-detalle-container"
+                hx-swap="outerHTML"
+                hx-select="#compra-detalle-container"  autocomplete="off">
+                {% csrf_token %}
+                <div class="row align-items-end g-3">
+                    <div class="col-md-4">
+                        <label class="form-label required">Producto</label>
+                        {{ form.producto }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label required">Cantidad (Libras/Unidades)</label>
+                        {{ form.cantidad }}
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label required">Costo Unitario ($)</label>
+                        {{ form.precio_unitario }}
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+                            Agregar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Costo Unit.</th>
+                        <th>Subtotal</th>
+                        <th class="w-1">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for detalle in detalles %}
+                    <tr>
+                        <td>{{ detalle.producto.nombre }}</td>
+                        <td class="text-secondary">{{ detalle.cantidad }}</td>
+                        <td class="text-secondary">${{ detalle.precio_unitario|floatformat:2 }}</td>
+                        <td class="font-weight-bold">${{ detalle.subtotal|floatformat:2 }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger"
+                                hx-post="{% url 'detalle_compra_eliminar' detalle.pk %}"
+                                hx-target="#compra-detalle-container"
+                                hx-swap="outerHTML"
+                                hx-select="#compra-detalle-container" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                                Quitar
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-secondary py-4">
+                            Factura vacía. Agrega los productos arriba.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="card-footer text-end">
+            <button class="btn btn-success" disabled title="Bloqueado hasta armar módulo de inventario">
+                Confirmar e Ingresar al Kardex
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
