@@ -1,5 +1,7 @@
-{% extends 'base.html' %} {% block content %}
+{% extends 'base.html' %} 
+{% block content %}
 <div id="compra-detalle-container" class="container-xl">
+    
     <div class="card mb-3">
         <div class="card-header">
             <h3 class="card-title">Documento en Borrador: {{ compra.numero_comprobante }}</h3>
@@ -15,13 +17,15 @@
                     <div class="font-weight-medium">{{ compra.get_tipo_comprobante_display }} | {{ compra.fecha_compra }}</div>
                 </div>
                 <div class="col-md-4 text-end">
-                    <div class="text-secondary mb-1">Total Factura</div>
-                    <h2 class="m-0 text-green">${{ compra.total|default:"0.00"|floatformat:2 }}</h2>
+                    <div class="text-secondary mb-1">Subtotal: ${{ compra.subtotal|default:"0.00"|floatformat:2 }}</div>
+                    <div class="text-secondary mb-1">IVA (13%): ${{ compra.impuestos|default:"0.00"|floatformat:2 }}</div>
+                    <h2 class="m-0 text-green">Total: ${{ compra.total|default:"0.00"|floatformat:2 }}</h2>
                 </div>
             </div>
         </div>
     </div>
 
+    {% if compra.estado == 'borrador' %}
     <div class="card mb-3">
         <div class="card-body">
             <form hx-post="{% url 'detalle_compra_crear' compra.pk %}"
@@ -52,6 +56,11 @@
             </form>
         </div>
     </div>
+    {% else %}
+    <div class="alert alert-success mt-3">
+        Factura procesada. Documento sellado contablemente.
+    </div>
+    {% endif %}
 
     <div class="card">
         <div class="table-responsive">
@@ -73,13 +82,18 @@
                         <td class="text-secondary">${{ detalle.precio_unitario|floatformat:2 }}</td>
                         <td class="font-weight-bold">${{ detalle.subtotal|floatformat:2 }}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger"
-                                hx-post="{% url 'detalle_compra_eliminar' detalle.pk %}"
-                                hx-target="#compra-detalle-container"
-                                hx-swap="outerHTML"
-                                hx-select="#compra-detalle-container" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                            {% if compra.estado == 'borrador' %}
+                            <button class="btn btn-sm btn-outline-danger" 
+                                hx-post="{% url 'detalle_compra_eliminar' detalle.pk %}" 
+                                hx-target="#compra-detalle-container" 
+                                hx-swap="outerHTML" 
+                                hx-select="#compra-detalle-container"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
                                 Quitar
                             </button>
+                            {% else %}
+                            <span class="badge bg-secondary">Sellado</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -94,9 +108,14 @@
         </div>
         
         <div class="card-footer text-end">
-            <button class="btn btn-success" disabled title="Bloqueado hasta armar módulo de inventario">
-                Confirmar e Ingresar al Kardex
-            </button>
+            {% if compra.estado == 'borrador' %}
+            <form action="{% url 'compra_confirmar' compra.pk %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success" {% if not detalles %}disabled{% endif %}>
+                    Confirmar e Ingresar al Kardex
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>

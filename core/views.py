@@ -8,6 +8,8 @@ from django.core.paginator import Paginator
 from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm,CompraForm, DetalleCompraForm
 from django.http import HttpResponse
 from django.urls import reverse
+from django.db import transaction
+from django.contrib import messages
 from decimal import Decimal
 @login_required
 def home(request):
@@ -462,10 +464,21 @@ def detalle_compra_crear(request, compra_id):
             detalle.save()
             
             # 4. Recalculamos el total general de la factura y lo forzamos a 2 decimales estrictos
-            total_calculado = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
+            # 4. Recalculamos el subtotal de la factura
+            suma_subtotales = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
+            subtotal_decimal = Decimal(str(suma_subtotales)).quantize(Decimal('0.01'))
             
-            # Limpiamos la basura de coma flotante de SQLite antes de guardar
-            compra.total = Decimal(str(total_calculado)).quantize(Decimal('0.01'))
+            # Motor de Impuestos: Evaluar estrictamente el tipo de documento
+            if compra.tipo_comprobante == 'ccf':
+                # Calcula el 13% de IVA
+                iva = (subtotal_decimal * Decimal('0.13')).quantize(Decimal('0.01'))
+            else:
+                # Factura de Consumidor Final o Recibos no suman IVA extra al final
+                iva = Decimal('0.00')
+                
+            compra.subtotal = subtotal_decimal
+            compra.impuestos = iva
+            compra.total = subtotal_decimal + iva
             compra.save()
     # 5. Preparamos los datos frescos para devolverle a HTMX
     detalles = DetalleCompra.objects.filter(compra=compra)
@@ -482,4 +495,96 @@ def detalle_compra_crear(request, compra_id):
 
 @login_required
 def detalle_compra_eliminar(request, detalle_id):
-    pass
+    # 1. Interceptamos la línea específica a destruir
+    detalle = get_object_or_404(DetalleCompra, pk=detalle_id)
+    compra = detalle.compra  # Guardamos la referencia de la factura antes de volar el registro
+    
+    if request.method == 'POST':
+        # 2. Ejecutamos la eliminación en la base de datos
+        detalle.delete()
+        
+        # 3. Recalculamos el total de la factura
+        # El "or 0" es el blindaje: si se borró todo y devuelve None, asigna 0 por defecto.
+        total_calculado = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
+        
+        # 4. Recalculamos el subtotal de la factura
+        suma_subtotales = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
+        subtotal_decimal = Decimal(str(suma_subtotales)).quantize(Decimal('0.01'))
+            
+            # Motor de Impuestos: Evaluar estrictamente el tipo de documento
+        if compra.tipo_comprobante == 'ccf':
+                # Calcula el 13% de IVA
+                iva = (subtotal_decimal * Decimal('0.13')).quantize(Decimal('0.01'))
+        else:
+                # Factura de Consumidor Final o Recibos no suman IVA extra al final
+                iva = Decimal('0.00')
+                
+        compra.subtotal = subtotal_decimal
+        compra.impuestos = iva
+        compra.total = subtotal_decimal + iva
+        compra.save()
+        
+    # 5. Preparamos la pantalla fresca para HTMX
+    detalles = DetalleCompra.objects.filter(compra=compra)
+    form_limpio = DetalleCompraForm()
+    
+    context = {
+        'compra': compra,
+        'detalles': detalles,
+        'form': form_limpio,
+    }
+    
+    return render(request, 'core/partials/compra_detalle.html', context)
+
+@login_required
+def compra_confirmar(request, compra_id):
+    compra = get_object_or_404(Compra, pk=compra_id)
+    
+    if request.method == 'POST':
+        # BLOQUEO 1: Evitar doble inyeccion al Kardex
+        if compra.estado != 'borrador':
+            messages.error(request, "Esta factura ya fue ingresada al Kardex y está bloqueada.")
+            return redirect('compra_detalle', pk=compra.pk)
+            
+        detalles = DetalleCompra.objects.filter(compra=compra)
+        
+        # BLOQUEO 2: Evitar procesar facturas vacías
+        if not detalles.exists():
+            messages.error(request, "No puedes procesar una factura sin productos.")
+            return redirect('compra_detalle', pk=compra.pk)
+            
+        try:
+            # TRANSACCIÓN ATÓMICA: Todo o nada. Protege el Kardex de cortes de energía o errores.
+            with transaction.atomic():
+                for detalle in detalles:
+                    producto = detalle.producto
+                    
+                    # 1. Foto del pasado ANTES de alterar el stock
+                    stock_actual = producto.stock
+                    costo_actual = producto.precio_costo
+                    cantidad_nueva = detalle.cantidad
+                    precio_nuevo = detalle.precio_unitario
+                    
+                    # 2. Proyección futura para evitar división por cero
+                    stock_total_futuro = stock_actual + cantidad_nueva
+                    
+                    if stock_total_futuro > 0:
+                        # 3. Fórmula estricta del Costo Promedio Ponderado (CPP)
+                        nuevo_costo = ((stock_actual * costo_actual) + (cantidad_nueva * precio_nuevo)) / stock_total_futuro
+                        producto.precio_costo = Decimal(str(nuevo_costo)).quantize(Decimal('0.01'))
+                    else:
+                        producto.precio_costo = precio_nuevo
+
+                    # 4. Sumamos el stock físico
+                    producto.stock += cantidad_nueva
+                    producto.save()
+                
+                # 5. Sellamos la factura permanentemente
+                compra.estado = 'completada'
+                compra.save()
+                
+            messages.success(request, "Factura procesada. Inventario y costos actualizados correctamente.")
+        except Exception as e:
+            messages.error(request, f"Error crítico de base de datos: {e}")
+            
+    return redirect('compra_detalle', pk=compra.pk)
