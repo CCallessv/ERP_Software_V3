@@ -11,6 +11,8 @@ from django.urls import reverse
 from django.db import transaction
 from django.contrib import messages
 from decimal import Decimal
+
+
 @login_required
 def home(request):
     # Contamos cuántos productos y categorías hay en la BD real
@@ -27,16 +29,14 @@ def exit(request):
     logout(request) # Borra la sesión
     return redirect('login') # Te manda al login
 
-from django.http import HttpResponse # Asegúrate de importar esto
-
 def crear_cliente(request):
     if request.method == 'POST':
         form = ClienteForm(request.POST)
         if form.is_valid():
             form.save()
-            # En lugar de renderizar una página, enviamos la señal de éxito
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'proveedorActualizado' # Usamos el trigger que ya escucha tu JS
+            # Blindaje arquitectónico: Forzamos recarga total para sincronizar métricas y tabla
+            response['HX-Refresh'] = 'true' 
             return response
     else:
         form = ClienteForm()
@@ -50,9 +50,9 @@ def editar_cliente(request, pk):
         form = ClienteForm(request.POST, instance=cliente)
         if form.is_valid():
             form.save()
-            # ESTA ES LA CORRECCIÓN OBLIGATORIA
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'proveedorActualizado' # Dispara la limpieza y recarga
+            # SEÑAL AISLADA ESTRICTAMENTE PARA EL MÓDULO DE CLIENTES
+            response['HX-Trigger'] = 'actualizarTablaClientes' 
             return response
     else:
         form = ClienteForm(instance=cliente)
@@ -348,7 +348,7 @@ def crear_categoria(request):
             categoria.save()
             
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'categoriaActualizada'
+            response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
             return response
         else:
             print("❌ ERRORES DE VALIDACIÓN:", form.errors)
@@ -366,7 +366,7 @@ def editar_categoria(request, pk):
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'categoriaActualizada'
+            response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
             return response
     else:
         form = CategoriaForm(instance=categoria)
@@ -378,15 +378,14 @@ def eliminar_categoria(request, pk):
     categoria = get_object_or_404(Categoria, pk=pk)
     
     if request.method == 'POST':
-        # Soft delete: la ocultamos en lugar de borrarla
         categoria.estado = False
         categoria.save()
         
         response = HttpResponse(status=204)
-        response['HX-Trigger'] = 'categoriaActualizada'
+        response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
         return response
         
-    return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})    
+    return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})  
 
 def gestionar_presentaciones(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
@@ -588,3 +587,33 @@ def compra_confirmar(request, compra_id):
             messages.error(request, f"Error crítico de base de datos: {e}")
             
     return redirect('compra_detalle', pk=compra.pk)
+
+
+@login_required
+def compra_list(request):
+    # select_related('proveedor') es el blindaje contra el problema N+1
+    compras = Compra.objects.select_related('proveedor').all()
+    
+    context = {
+        'compras': compras
+    }
+    return render(request, 'core/compra_list.html', context)    
+
+@login_required
+def compra_eliminar(request, compra_id):
+    compra = get_object_or_404(Compra, pk=compra_id)
+    
+    if request.method == 'POST':
+        # CANDADO ESTRICTO: Solo se permite destruir basura temporal
+        if compra.estado != 'borrador':
+            messages.error(request, "Violación de seguridad: No puedes eliminar una factura que ya afectó el stock del Kardex.")
+            return redirect('compra_list')
+            
+        numero = compra.numero_comprobante
+        compra.delete()
+        messages.success(request, f"Borrador {numero} destruido permanentemente.")
+        
+    return redirect('compra_list')
+
+
+

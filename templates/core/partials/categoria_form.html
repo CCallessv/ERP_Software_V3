@@ -1,35 +1,41 @@
-<div class="modal-content">
-    <div class="modal-header">
-        <h5 class="modal-title">Nueva Categoría</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-    </div>
-    
-    <form hx-post="{{ request.path }}" autocomplete="off" hx-target="#dialog">
-        {% csrf_token %}
-        
-        <div class="modal-body">
-            <div class="mb-3">
-                <label class="form-label required">Nombre de la Categoría</label>
-                {{ form.nombre }}
-                {% if form.nombre.errors %}
-                    <div class="text-danger small mt-1 fw-bold">{{ form.nombre.errors.0 }}</div>
-                {% endif %}
-            </div>
+<div class="modal modal-blur fade" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
             
-            <div class="mb-3">
-                <label class="form-label">Descripción</label>
-                {{ form.descripcion }}
-                {% if form.descripcion.errors %}
-                    <div class="text-danger small mt-1 fw-bold">{{ form.descripcion.errors.0 }}</div>
-                {% endif %}
+            <div class="modal-header">
+                <h5 class="modal-title">{{ titulo|default:"Categoría" }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-        </div>
 
-        <div class="modal-footer">
-            <a href="#" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</a>
-            <button type="submit" class="btn btn-primary ms-auto">
-                Guardar Categoría
-            </button>
+            <form hx-post="{% if categoria %}{% url 'editar_categoria' categoria.pk %}{% else %}{% url 'crear_categoria' %}{% endif %}" 
+                  autocomplete="off">
+                {% csrf_token %}
+                
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label required">Nombre de la Categoría</label>
+                        {{ form.nombre }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        {{ form.descripcion }}
+                    </div>
+                    
+                    {% for hidden in form.hidden_fields %}
+                        {{ hidden }}
+                    {% endfor %}
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn me-auto" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+
         </div>
-    </form>
+    </div>
 </div>

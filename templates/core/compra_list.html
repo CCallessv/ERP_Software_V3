@@ -1,0 +1,115 @@
+{% extends 'base.html' %} 
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header d-print-none mb-3">
+        <div class="row align-items-center">
+            <div class="col">
+                <h2 class="page-title">
+                    Historial de Compras
+                </h2>
+                <div class="text-secondary mt-1">Gestión de facturas y recepciones de inventario</div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <div class="btn-list">
+                    <a href="{% url 'crear_compra' %}" class="btn btn-primary d-none d-sm-inline-block">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+                        Nueva Compra
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Documento</th>
+                        <th>Proveedor</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th class="w-1">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for compra in compras %}
+                    <tr>
+                        <td>{{ compra.fecha_compra|date:"d M Y" }}</td>
+                        <td>
+                            <div class="font-weight-medium">{{ compra.numero_comprobante }}</div>
+                            <div class="text-secondary text-truncate mt-n1">{{ compra.get_tipo_comprobante_display }}</div>
+                        </td>
+                        <td>{{ compra.proveedor.nombre_comercial }}</td>
+                        <td>
+                            {% if compra.estado == 'borrador' %}
+                                <span class="badge bg-warning text-warning-fg">Borrador</span>
+                            {% elif compra.estado == 'completada' %}
+                                <span class="badge bg-success text-success-fg">Completada</span>
+                            {% elif compra.estado == 'anulada' %}
+                                <span class="badge bg-danger text-danger-fg">Anulada</span>
+                            {% endif %}
+                        </td>
+                        <td class="font-weight-bold text-green">${{ compra.total|floatformat:2 }}</td>
+                        <td>
+                            <div class="btn-list flex-nowrap">
+                                <a href="{% url 'compra_detalle' compra.pk %}" class="btn btn-sm btn-outline-primary">
+                                    Abrir
+                                </a>
+                                
+                                {% if compra.estado == 'borrador' %}
+                                <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-eliminar-{{ compra.pk }}">
+                                    Eliminar
+                                </button>
+
+                                <div class="modal modal-blur fade" id="modal-eliminar-{{ compra.pk }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            <div class="modal-status bg-danger"></div>
+                                            <div class="modal-body text-center py-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+                                                <h3>¿Estás seguro?</h3>
+                                                <div class="text-secondary">¿Deseas destruir el borrador <strong>{{ compra.numero_comprobante }}</strong>? Esta acción lo eliminará del sistema permanentemente.</div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <div class="w-100">
+                                                    <div class="row">
+                                                        <div class="col">
+                                                            <button type="button" class="btn w-100" data-bs-dismiss="modal">
+                                                                Cancelar
+                                                            </button>
+                                                        </div>
+                                                        <div class="col">
+                                                            <form action="{% url 'compra_eliminar' compra.pk %}" method="POST">
+                                                                {% csrf_token %}
+                                                                <button type="submit" class="btn btn-danger w-100">
+                                                                    Sí, destruir
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-secondary py-4">
+                            No hay registros de compras en el sistema.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

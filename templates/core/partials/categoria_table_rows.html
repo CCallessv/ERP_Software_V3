@@ -28,16 +28,13 @@
                     <div class="btn-list flex-nowrap">
                         <button class="btn btn-white btn-sm"
                                 hx-get="{% url 'editar_categoria' categoria.id %}"
-                                hx-target="#dialog"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modal-generic">
+                                hx-target="#modal-container">
                             Editar
                         </button>
+                        
                         <button class="btn btn-danger btn-sm"
                                 hx-get="{% url 'eliminar_categoria' categoria.id %}"
-                                hx-target="#dialog"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modal-generic">
+                                hx-target="#modal-container">
                             Eliminar
                         </button>
                     </div>

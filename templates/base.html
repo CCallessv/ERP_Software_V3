@@ -120,6 +120,17 @@
                                 <span class="nav-link-title">Categorías</span>
                             </a>
                         </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'compra_list' %}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M17 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M17 17h-11v-14h-2" /><path d="M6 5l14 1l-1 7h-13" /></svg>
+                                </span>
+                                <span class="nav-link-title">
+                                    Compras
+                                </span>
+                            </a>
+                        </li>
                         <hr class="my-3">
 
                         <li class="nav-item">
@@ -152,7 +163,7 @@
                 </button>
                 <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
                     <a href="/">
-                        <img src="{% static 'img/logo-empresa.jpg' %}" 
+                        <img src="{% static 'img/logo.jpg' %}" 
                              alt="Finca Latina"
                              width="110" 
                              height="auto" 
@@ -234,6 +245,8 @@
                                      <span class="nav-link-title">Categorías</span>
                                 </a>
                             </li>
+
+                            
                         </ul>
                     </div>
                 </div>
@@ -317,13 +330,22 @@
         
 
 
-            
+            <div id="modal-container"></div>
             <script>
+                // 1. MOTOR DE APERTURA: Escucha cuando HTMX inyecta un formulario y abre el modal
+                document.body.addEventListener("htmx:afterSwap", function(evt) {
+                    if (evt.detail.target.id === "modal-container") {
+                        let modalElement = document.querySelector('#modal-container .modal');
+                        if (modalElement) {
+                            let modal = new bootstrap.Modal(modalElement);
+                            modal.show();
+                        }
+                    }
+                });
+            
+                // 2. MOTOR DE LIMPIEZA: Escucha el guardado exitoso (204) y destruye el modal
                 document.body.addEventListener('htmx:beforeSwap', function(evt) {
-                    // Si el servidor nos responde con éxito (204)
                     if (evt.detail.xhr.status === 204) {
-                        
-                        // 1. Buscamos cualquier modal genérico que esté abierto en la pantalla
                         var openModal = document.querySelector('.modal.show');
                         if (openModal) {
                             var modalInstance = bootstrap.Modal.getInstance(openModal);
@@ -332,17 +354,26 @@
                             }
                         }
                         
-                        // 2. El "Limpiador": Forzamos la destrucción de la pantalla negra si Bootstrap se traba
+                        // Forzamos la destrucción de la pantalla negra si Bootstrap se traba
                         setTimeout(function() {
                             document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
-                                backdrop.remove(); // Matamos la capa oscura
+                                backdrop.remove(); 
                             });
-                            document.body.classList.remove('modal-open'); // Desbloqueamos el scroll
+                            document.body.classList.remove('modal-open'); 
                             document.body.style.overflow = '';
                             document.body.style.paddingRight = '';
-                        }, 250); // Le damos un cuarto de segundo a la animación antes de forzar el cierre
+                        }, 250); 
+                    }
+                });
+
+                // 3. MOTOR ANTI-FANTASMAS: Destruye el HTML cuando el modal se cierra con "Cancelar" o la "X"
+                document.body.addEventListener("hidden.bs.modal", function () {
+                    let container = document.getElementById("modal-container");
+                    if (container) {
+                        container.innerHTML = ""; // Vaciamos el contenedor por completo
                     }
                 });
             </script>
+            </body>
             </body>
     </html>
