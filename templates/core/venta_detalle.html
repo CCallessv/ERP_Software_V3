@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <a href="#" class="btn btn-outline-secondary d-none d-sm-inline-block mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 14l-4 -4l4 -4" /><path d="M5 10h11a4 4 0 1 1 0 8h-1" /></svg>
+                    Volver al Listado de Ventas
+                </a>
+                <h2 class="page-title">
+                    Documento {% if venta.estado == 'borrador' %}en Borrador{% else %}Procesado{% endif %}
+                </h2>
+                <div class="text-muted mt-1">UUID: {{ venta.codigo_generacion }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title">Datos del Emisor y Receptor</h3>
+                <div class="card-actions">
+                    <span class="badge {% if venta.estado == 'borrador' %}bg-warning{% else %}bg-success{% endif %} text-white">{{ venta.estado|upper }}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="datagrid">
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">Cliente</div>
+                        <div class="datagrid-content fw-bold">{{ venta.cliente.nombre }}</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">Tipo de Documento</div>
+                        <div class="datagrid-content">{{ venta.get_tipo_documento_display }}</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">Condición de Pago</div>
+                        <div class="datagrid-content">{{ venta.get_condicion_pago_display }} ({{ venta.get_metodo_pago_display }})</div>
+                    </div>
+                    <div class="datagrid-item">
+                        <div class="datagrid-title">Fecha y Hora de Emisión</div>
+                        <div class="datagrid-content">{{ venta.fecha_hora_emision|date:"d/m/Y H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            
+            {% if venta.estado == 'borrador' %}
+            <div class="card-body border-bottom">
+                <form hx-post="{% url 'venta_agregar_producto' venta.id %}" 
+                hx-target="#tabla-detalles-venta" 
+                hx-swap="innerHTML" 
+                hx-on::after-request="this.reset()" 
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                class="row g-2 align-items-end"
+                id="form-agregar-producto">
+    
+    <div class="col-md-4">
+        <label class="form-label text-danger">Producto *</label>
+        <select class="form-select" name="producto" required>
+            <option value="">Selecciona un producto del inventario...</option>
+            {% for p in productos %}
+                <option value="{{ p.id }}">{{ p.codigo }} - {{ p.nombre }} (Stock Disp: {{ p.stock|floatformat:2 }} {{ p.get_unidad_medida_base_display }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label text-danger">Cantidad *</label>
+        <input type="number" class="form-control" name="cantidad" step="0.01" min="0.01" placeholder="Ej: 1.5" required>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Descuento ($)</label>
+        <input type="number" class="form-control" name="descuento" step="0.01" min="0" value="0.00">
+    </div>
+    <div class="col-md-4">
+        <button type="submit" class="btn btn-primary w-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            Agregar a la Factura
+        </button>
+    </div>
+</form>
+            </div>
+            {% endif %}
+
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cant.</th>
+                            <th>P. Unitario</th>
+                            <th>Descuento</th>
+                            <th>Afectación</th>
+                            <th>Subtotal</th>
+                            {% if venta.estado == 'borrador' %}<th>Acción</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-detalles-venta">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                Factura en blanco. Selecciona un producto en la parte superior.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="card-footer bg-transparent border-top-0">
+                <div class="row align-items-center">
+                    <div class="col-6">
+                        {% if venta.estado == 'borrador' %}
+                        <button class="btn btn-success mt-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10" /></svg>
+                            Sellar Documento y Descontar Kardex
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div id="caja-totales" class="col-6 text-end">
+                        <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${{ venta.sumatoria_gravadas }}</span></div>
+                        <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas }}</span></div>
+                        <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${{ venta.iva }}</span></div>
+                        <h2 class="mb-0 text-success">Total: ${{ venta.total_pagar }}</h2>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

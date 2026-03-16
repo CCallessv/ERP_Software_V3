@@ -1,108 +1,105 @@
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from .models import Producto, Categoria, Cliente, Proveedor,PresentacionProducto, Compra, DetalleCompra
-from django.shortcuts import render, redirect, get_object_or_404 
-from django.contrib.auth import logout
-from django.db.models import Q, Sum, F
-from django.core.paginator import Paginator
-from .forms import ProductoForm, ProveedorForm, CategoriaForm,ClienteForm, PresentacionForm,CompraForm, DetalleCompraForm
-from django.http import HttpResponse
-from django.urls import reverse
-from django.db import transaction
-from django.contrib import messages
 from decimal import Decimal
+from typing import Any, Dict
+
+from django.contrib import messages
+from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Q, Sum, F
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.views.decorators.http import require_POST
+
+from .forms import (
+    ProductoForm,
+    ProveedorForm,
+    CategoriaForm,
+    ClienteForm,
+    PresentacionForm,
+    CompraForm,
+    DetalleCompraForm,
+)
+from .models import (
+    Producto,
+    Categoria,
+    Proveedor,
+    PresentacionProducto,
+    Compra,
+    DetalleCompra,
+    Venta,
+    Cliente,
+    DetalleVenta,
+)
 
 
 @login_required
-def home(request):
-    # Contamos cuántos productos y categorías hay en la BD real
+def home(request: HttpRequest) -> HttpResponse:
     total_productos = Producto.objects.count()
     total_categorias = Categoria.objects.count()
-    
-    context = {
+    context: Dict[str, Any] = {
         'total_productos': total_productos,
         'total_categorias': total_categorias,
     }
     return render(request, 'base.html', context)
 
-def exit(request):
-    logout(request) # Borra la sesión
-    return redirect('login') # Te manda al login
 
-def crear_cliente(request):
+def exit(request: HttpRequest) -> HttpResponse:
+    logout(request)
+    return redirect('login')
+
+
+def crear_cliente(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = ClienteForm(request.POST)
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            # Blindaje arquitectónico: Forzamos recarga total para sincronizar métricas y tabla
-            response['HX-Refresh'] = 'true' 
+            response['HX-Refresh'] = 'true'
             return response
     else:
         form = ClienteForm()
-
     return render(request, 'core/partials/modal_cliente.html', {'form': form})
 
-def editar_cliente(request, pk):
+
+def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
-    
     if request.method == 'POST':
         form = ClienteForm(request.POST, instance=cliente)
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            # SEÑAL AISLADA ESTRICTAMENTE PARA EL MÓDULO DE CLIENTES
-            response['HX-Trigger'] = 'actualizarTablaClientes' 
+            response['HX-Trigger'] = 'actualizarTablaClientes'
             return response
     else:
         form = ClienteForm(instance=cliente)
+    return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': cliente})
 
-    return render(request, 'core/partials/modal_cliente.html', {
-        'form': form,
-        'cliente': cliente 
-    })
 
-def eliminar_cliente(request, pk):
-    # Buscamos al cliente o damos error 404 si no existe
+def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
-
     if request.method == 'POST':
-        # Si el usuario confirmó (dio clic en "Si, eliminar"), lo borramos
         cliente.delete()
-        # Recargamos la pagina principal para que desaparezca de la tabla
         return render(request, 'core/partials/cliente_creado.html')
+    return render(request, 'core/partials/modal_eliminarCliente.html', {'cliente': cliente})
 
-    # Si es GET, mostramos la ventanita de advertencia (modal_eliminar.html)
-    return render(request, 'core/partials/modal_eliminarCliente.html', {'cliente': cliente})    
 
-def clientes_list(request):
-    # 1. OBTENER CLIENTES (¡Con paréntesis al final!)
-    # Usamos .order_by('-id') para ver los nuevos primero
-    queryset = Cliente.objects.all().order_by('-id') 
-
-    # 2. BUSCADOR
+def clientes_list(request: HttpRequest) -> HttpResponse:
+    queryset = Cliente.objects.all().order_by('-id')
     search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(
-            Q(nombres__icontains=search_query) | 
+            Q(nombres__icontains=search_query) |
             Q(documento__icontains=search_query)
         )
-
-    # 3. PAGINACIÓN
-    # Aquí es donde fallaba si 'queryset' era una función y no una lista
-    paginator = Paginator(queryset, 10) 
+    paginator = Paginator(queryset, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
-    # 4. HTMX (Para búsquedas dinámicas)
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/clientes_rows.html', {'page_obj': page_obj})
-
-    # 5. CONTEOS (Totales)
     total = Cliente.objects.count()
     activos = Cliente.objects.filter(estado=True).count()
     inactivos = Cliente.objects.filter(estado=False).count()
-    
     context = {
         'page_obj': page_obj,
         'total_clientes': total,
@@ -111,74 +108,49 @@ def clientes_list(request):
         'search_query': search_query
     }
     return render(request, 'core/clientes_list.html', context)
-    
 
 
-
-def productos_list(request):
-    # BASE DE DATOS: IGNORAR LOS ELIMINADOS
+def productos_list(request: HttpRequest) -> HttpResponse:
     productos_activos = Producto.objects.filter(activo=True)
-
-    # 1. LOGICA DE LA TABLA (Busqueda y Filtros)
-    # ELIMINAMOS 'padre' de select_related porque ya no existe
     queryset = productos_activos.select_related('categoria').order_by('-id')
-
     search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(
-            Q(nombre__icontains=search_query) | 
+            Q(nombre__icontains=search_query) |
             Q(codigo__icontains=search_query)
         )
-
     paginator = Paginator(queryset, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
-    # 2. LOGICA DEL DASHBOARD 
     total_productos = productos_activos.count()
-    
-    # ELIMINADOS: total_padres y total_subproductos
     stock_bajo = productos_activos.filter(stock__lte=F('stock_minimo')).count()
-    
     data_valor = productos_activos.aggregate(total=Sum(F('stock') * F('precio_costo')))
-    valor_total = data_valor['total'] or 0 
-
+    valor_total = data_valor['total'] or 0
     context = {
-        'productos': page_obj, 
-        'page_obj': page_obj, 
+        'productos': page_obj,
+        'page_obj': page_obj,
         'search_query': search_query,
         'total_productos': total_productos,
         'stock_bajo': stock_bajo,
         'valor_total': valor_total,
     }
-
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/producto_table_rows.html', context)
-
     return render(request, 'core/productos_list.html', context)
 
 
-def crear_producto(request):
+def crear_producto(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
-        # IMPORTANTE: request.FILES es obligatorio porque tu modelo tiene imágenes
         form = ProductoForm(request.POST, request.FILES)
-        
         if form.is_valid():
-            # 1. Pausamos el guardado
             producto = form.save(commit=False)
-            
-            # 2. Generación automática del código (Estándar ERP)
             ultimo_producto = Producto.objects.order_by('-id').first()
             if ultimo_producto:
                 nuevo_numero = ultimo_producto.id + 1
             else:
                 nuevo_numero = 1
             producto.codigo = f"PROD-{nuevo_numero:04d}"
-            
-            # 3. Guardamos en la base de datos
             producto.save()
-            
-            # 4. Éxito: disparamos el evento para la tabla de productos
             response = HttpResponse(status=204)
             response['HX-Trigger'] = 'productoActualizado'
             return response
@@ -186,16 +158,12 @@ def crear_producto(request):
             print("❌ ERRORES DE PRODUCTO:", form.errors)
     else:
         form = ProductoForm()
-
     return render(request, 'core/partials/producto_form.html', {'form': form, 'titulo_modal': 'Nuevo Producto'})
 
 
-
-def editar_producto(request, pk):
+def editar_producto(request: HttpRequest, pk: int) -> HttpResponse:
     producto = get_object_or_404(Producto, pk=pk)
-    
     if request.method == 'POST':
-        # IMPORTANTE: request.FILES para mantener la imagen
         form = ProductoForm(request.POST, request.FILES, instance=producto)
         if form.is_valid():
             form.save()
@@ -204,59 +172,44 @@ def editar_producto(request, pk):
             return response
     else:
         form = ProductoForm(instance=producto)
-        
     return render(request, 'core/partials/producto_form.html', {
-        'form': form, 
+        'form': form,
         'titulo_modal': f'Editar: {producto.codigo}'
     })
 
 
-def eliminar_producto(request, pk):
+def eliminar_producto(request: HttpRequest, pk: int) -> HttpResponse:
     producto = get_object_or_404(Producto, pk=pk)
-    
     if request.method == 'POST':
-        # SOFT DELETE: Protegemos el historial financiero
         producto.activo = False
         producto.save()
-        
         response = HttpResponse(status=204)
         response['HX-Trigger'] = 'productoActualizado'
         return response
-        
     return render(request, 'core/partials/producto_confirm_delete.html', {'producto': producto})
 
 
-
-def proveedor_list(request):
-    # 1. Obtener la búsqueda del parámetro 'q' que enviará HTMX
+def proveedor_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
-    
-    # 2. Filtrar solo proveedores activos (Soft Delete)
     proveedores = Proveedor.objects.filter(activo=True)
-    
     if busqueda:
         proveedores = proveedores.filter(
             Q(nombre_comercial__icontains=busqueda) |
             Q(nit__icontains=busqueda) |
             Q(contacto_nombre__icontains=busqueda)
         )
-
-    # 3. Cálculos para los indicadores (KPIs)
     context = {
         'proveedores': proveedores,
         'total_proveedores': Proveedor.objects.filter(activo=True).count(),
         'grandes_contribuyentes': Proveedor.objects.filter(activo=True, clasificacion='grande').count(),
         'creditos_activos': Proveedor.objects.filter(activo=True, dias_credito__gt=0).count(),
     }
-
-    # Si es una petición de HTMX, solo devolvemos el fragmento de la tabla
     if request.headers.get('HX-Request'):
-        return render(request, 'core/partials/proveedor_table_rows.html', context) # <-- AQUÍ ESTÁ EL CAMBIO
-        
+        return render(request, 'core/partials/proveedor_table_rows.html', context)
     return render(request, 'core/proveedor_list.html', context)
 
 
-def proveedor_crear(request):
+def proveedor_crear(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = ProveedorForm(request.POST)
         if form.is_valid():
@@ -265,18 +218,13 @@ def proveedor_crear(request):
             response['HX-Trigger'] = 'proveedorActualizado'
             return response
         else:
-            # Si hay errores, los imprimimos para depurar
             print("ERRORES DEL FORMULARIO:", form.errors)
-            
     else:
-        # Si es GET, creamos un formulario vacío
         form = ProveedorForm()
-
-    # ESTE RETURN VA AQUÍ AFUERA. ALINEADO CON EL IF/ELSE.
-    # Así garantiza que devolverá el HTML tanto si es GET como si falló el POST.
     return render(request, 'core/partials/proveedor_form.html', {'form': form})
 
-def proveedor_editar(request, pk):
+
+def proveedor_editar(request: HttpRequest, pk: int) -> HttpResponse:
     proveedor = get_object_or_404(Proveedor, pk=pk)
     if request.method == 'POST':
         form = ProveedorForm(request.POST, instance=proveedor)
@@ -287,158 +235,127 @@ def proveedor_editar(request, pk):
             return response
     else:
         form = ProveedorForm(instance=proveedor)
-    
-    return render(request, 'core/partials/proveedor_form.html', {'form': form})    
+    return render(request, 'core/partials/proveedor_form.html', {'form': form})
 
 
-def eliminar_proveedor(request, pk):
+def eliminar_proveedor(request: HttpRequest, pk: int) -> HttpResponse:
     proveedor = get_object_or_404(Proveedor, pk=pk)
-    
     if request.method == 'POST':
-        # Soft Delete: Cambiamos el estado en lugar de borrar el registro fisico
-        proveedor.activo = False 
+        proveedor.activo = False
         proveedor.save()
-        
         response = HttpResponse(status=204)
         response['HX-Trigger'] = 'proveedorActualizado'
         return response
-        
-    # Si es GET, devolvemos el modal de confirmación
     return render(request, 'core/partials/proveedor_confirm_delete.html', {'proveedor': proveedor})
 
-# ==========================================
-# MÓDULO DE CATEGORÍAS
-# ==========================================
 
-def categorias_list(request):
+def categorias_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
-    
-    # Filtramos categorias activas (estado=True)
     categorias = Categoria.objects.filter(estado=True).order_by('nombre')
-    
     if busqueda:
         categorias = categorias.filter(
             Q(nombre__icontains=busqueda) |
             Q(descripcion__icontains=busqueda)
         )
-
-    # Paginación
     paginator = Paginator(categorias, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
     context = {
         'categorias': page_obj,
         'page_obj': page_obj,
         'search_query': busqueda,
         'total_categorias': Categoria.objects.filter(estado=True).count(),
     }
-
     if request.headers.get('HX-Request'):
         return render(request, 'core/partials/categoria_table_rows.html', context)
-        
     return render(request, 'core/categorias_list.html', context)
 
-def crear_categoria(request):
+
+def crear_categoria(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = CategoriaForm(request.POST)
         if form.is_valid():
             categoria = form.save(commit=False)
-            categoria.estado = True 
+            categoria.estado = True
             categoria.save()
-            
             response = HttpResponse(status=204)
-            response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
+            response['HX-Refresh'] = 'true'
             return response
         else:
             print("❌ ERRORES DE VALIDACIÓN:", form.errors)
     else:
         form = CategoriaForm()
-
     return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Nueva Categoría'})
 
 
-def editar_categoria(request, pk):
+def editar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
     categoria = get_object_or_404(Categoria, pk=pk)
-    
     if request.method == 'POST':
         form = CategoriaForm(request.POST, instance=categoria)
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
+            response['HX-Refresh'] = 'true'
             return response
     else:
         form = CategoriaForm(instance=categoria)
+    return render(request, 'core/partials/categoria_form.html', {
+        'form': form,
+        'titulo': 'Editar Categoría',
+        'categoria': categoria
+    })
 
-    return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Editar Categoría', 'categoria': categoria})
 
-
-def eliminar_categoria(request, pk):
+def eliminar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
     categoria = get_object_or_404(Categoria, pk=pk)
-    
     if request.method == 'POST':
         categoria.estado = False
         categoria.save()
-        
         response = HttpResponse(status=204)
-        response['HX-Refresh'] = 'true' # Sincroniza la tabla y las métricas
+        response['HX-Refresh'] = 'true'
         return response
-        
-    return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})  
+    return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})
 
-def gestionar_presentaciones(request, pk):
+
+def gestionar_presentaciones(request: HttpRequest, pk: int) -> HttpResponse:
     producto = get_object_or_404(Producto, pk=pk)
-    # Solo traemos las presentaciones activas
     presentaciones = producto.presentaciones.filter(activo=True)
-    
     if request.method == 'POST':
         form = PresentacionForm(request.POST)
         if form.is_valid():
             nueva_presentacion = form.save(commit=False)
             nueva_presentacion.producto = producto
             nueva_presentacion.save()
-            # Limpiamos el formulario después de guardar para agregar otra
-            form = PresentacionForm() 
+            form = PresentacionForm()
     else:
         form = PresentacionForm()
-        
     return render(request, 'core/partials/presentaciones_modal.html', {
         'producto': producto,
         'presentaciones': presentaciones,
         'form': form
     })
 
+
 @login_required
-def crear_compra(request):
+def crear_compra(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = CompraForm(request.POST)
         if form.is_valid():
-            # Pausamos el guardado para inyectar datos de auditoria
             nueva_compra = form.save(commit=False)
             nueva_compra.usuario = request.user
-            nueva_compra.estado = 'borrador' # Forzamos el estado inicial
+            nueva_compra.estado = 'borrador'
             nueva_compra.save()
-            
-            # El siguiente paso logico sera redirigir a la pantalla de agregar productos
-            # Por ahora, lo mandaremos temporalmente al panel principal hasta que hagamos esa vista
             return redirect('compra_detalle', pk=nueva_compra.pk)
     else:
         form = CompraForm()
+    return render(request, 'core/partials/compra_form.html', {'form': form})
 
-    return render(request, 'core/partials/compra_form.html', {'form': form})    
 
 @login_required
-def compra_detalle(request, pk):
-    # Traemos la cabecera de la compra
+def compra_detalle(request: HttpRequest, pk: int) -> HttpResponse:
     compra = get_object_or_404(Compra, pk=pk)
-    
-    # Traemos las líneas de detalle que ya tenga esta compra
     detalles = DetalleCompra.objects.filter(compra=compra)
-    
-    # Instanciamos el formulario vacío para agregar más productos
     form = DetalleCompraForm()
-    
     context = {
         'compra': compra,
         'detalles': detalles,
@@ -446,174 +363,248 @@ def compra_detalle(request, pk):
     }
     return render(request, 'core/partials/compra_detalle.html', context)
 
+
 @login_required
-def detalle_compra_crear(request, compra_id):
-    # 1. Traemos la factura en la que estamos trabajando
+def detalle_compra_crear(request: HttpRequest, compra_id: int) -> HttpResponse:
     compra = get_object_or_404(Compra, pk=compra_id)
-    
     if request.method == 'POST':
         form = DetalleCompraForm(request.POST)
         if form.is_valid():
-            # 2. Pausamos el guardado para inyectar datos calculados
             detalle = form.save(commit=False)
             detalle.compra = compra
-            
-            # 3. Calculamos el subtotal de esta línea (Cantidad x Precio)
             detalle.subtotal = detalle.cantidad * detalle.precio_unitario
             detalle.save()
-            
-            # 4. Recalculamos el total general de la factura y lo forzamos a 2 decimales estrictos
-            # 4. Recalculamos el subtotal de la factura
             suma_subtotales = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
             subtotal_decimal = Decimal(str(suma_subtotales)).quantize(Decimal('0.01'))
-            
-            # Motor de Impuestos: Evaluar estrictamente el tipo de documento
             if compra.tipo_comprobante == 'ccf':
-                # Calcula el 13% de IVA
                 iva = (subtotal_decimal * Decimal('0.13')).quantize(Decimal('0.01'))
             else:
-                # Factura de Consumidor Final o Recibos no suman IVA extra al final
                 iva = Decimal('0.00')
-                
             compra.subtotal = subtotal_decimal
             compra.impuestos = iva
             compra.total = subtotal_decimal + iva
             compra.save()
-    # 5. Preparamos los datos frescos para devolverle a HTMX
     detalles = DetalleCompra.objects.filter(compra=compra)
-    form_limpio = DetalleCompraForm() # Mandamos un formulario vacío para el siguiente lácteo
-    
+    form_limpio = DetalleCompraForm()
     context = {
         'compra': compra,
         'detalles': detalles,
         'form': form_limpio,
     }
-    
-    # HTMX recibe esto y reemplaza el contenedor
     return render(request, 'core/partials/compra_detalle.html', context)
 
+
 @login_required
-def detalle_compra_eliminar(request, detalle_id):
-    # 1. Interceptamos la línea específica a destruir
+def detalle_compra_eliminar(request: HttpRequest, detalle_id: int) -> HttpResponse:
     detalle = get_object_or_404(DetalleCompra, pk=detalle_id)
-    compra = detalle.compra  # Guardamos la referencia de la factura antes de volar el registro
-    
+    compra = detalle.compra
     if request.method == 'POST':
-        # 2. Ejecutamos la eliminación en la base de datos
         detalle.delete()
-        
-        # 3. Recalculamos el total de la factura
-        # El "or 0" es el blindaje: si se borró todo y devuelve None, asigna 0 por defecto.
         total_calculado = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
-        
-        # 4. Recalculamos el subtotal de la factura
         suma_subtotales = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
         subtotal_decimal = Decimal(str(suma_subtotales)).quantize(Decimal('0.01'))
-            
-            # Motor de Impuestos: Evaluar estrictamente el tipo de documento
         if compra.tipo_comprobante == 'ccf':
-                # Calcula el 13% de IVA
-                iva = (subtotal_decimal * Decimal('0.13')).quantize(Decimal('0.01'))
+            iva = (subtotal_decimal * Decimal('0.13')).quantize(Decimal('0.01'))
         else:
-                # Factura de Consumidor Final o Recibos no suman IVA extra al final
-                iva = Decimal('0.00')
-                
+            iva = Decimal('0.00')
         compra.subtotal = subtotal_decimal
         compra.impuestos = iva
         compra.total = subtotal_decimal + iva
         compra.save()
-        
-    # 5. Preparamos la pantalla fresca para HTMX
     detalles = DetalleCompra.objects.filter(compra=compra)
     form_limpio = DetalleCompraForm()
-    
     context = {
         'compra': compra,
         'detalles': detalles,
         'form': form_limpio,
     }
-    
     return render(request, 'core/partials/compra_detalle.html', context)
 
+
 @login_required
-def compra_confirmar(request, compra_id):
+def compra_confirmar(request: HttpRequest, compra_id: int) -> HttpResponse:
     compra = get_object_or_404(Compra, pk=compra_id)
-    
     if request.method == 'POST':
-        # BLOQUEO 1: Evitar doble inyeccion al Kardex
         if compra.estado != 'borrador':
             messages.error(request, "Esta factura ya fue ingresada al Kardex y está bloqueada.")
             return redirect('compra_detalle', pk=compra.pk)
-            
         detalles = DetalleCompra.objects.filter(compra=compra)
-        
-        # BLOQUEO 2: Evitar procesar facturas vacías
         if not detalles.exists():
             messages.error(request, "No puedes procesar una factura sin productos.")
             return redirect('compra_detalle', pk=compra.pk)
-            
         try:
-            # TRANSACCIÓN ATÓMICA: Todo o nada. Protege el Kardex de cortes de energía o errores.
             with transaction.atomic():
                 for detalle in detalles:
                     producto = detalle.producto
-                    
-                    # 1. Foto del pasado ANTES de alterar el stock
                     stock_actual = producto.stock
                     costo_actual = producto.precio_costo
                     cantidad_nueva = detalle.cantidad
                     precio_nuevo = detalle.precio_unitario
-                    
-                    # 2. Proyección futura para evitar división por cero
                     stock_total_futuro = stock_actual + cantidad_nueva
-                    
                     if stock_total_futuro > 0:
-                        # 3. Fórmula estricta del Costo Promedio Ponderado (CPP)
                         nuevo_costo = ((stock_actual * costo_actual) + (cantidad_nueva * precio_nuevo)) / stock_total_futuro
                         producto.precio_costo = Decimal(str(nuevo_costo)).quantize(Decimal('0.01'))
                     else:
                         producto.precio_costo = precio_nuevo
-
-                    # 4. Sumamos el stock físico
                     producto.stock += cantidad_nueva
                     producto.save()
-                
-                # 5. Sellamos la factura permanentemente
                 compra.estado = 'completada'
                 compra.save()
-                
             messages.success(request, "Factura procesada. Inventario y costos actualizados correctamente.")
         except Exception as e:
             messages.error(request, f"Error crítico de base de datos: {e}")
-            
     return redirect('compra_detalle', pk=compra.pk)
 
 
 @login_required
-def compra_list(request):
-    # select_related('proveedor') es el blindaje contra el problema N+1
+def compra_list(request: HttpRequest) -> HttpResponse:
     compras = Compra.objects.select_related('proveedor').all()
-    
     context = {
         'compras': compras
     }
-    return render(request, 'core/compra_list.html', context)    
+    return render(request, 'core/compra_list.html', context)
+
 
 @login_required
-def compra_eliminar(request, compra_id):
+def compra_eliminar(request: HttpRequest, compra_id: int) -> HttpResponse:
     compra = get_object_or_404(Compra, pk=compra_id)
-    
     if request.method == 'POST':
-        # CANDADO ESTRICTO: Solo se permite destruir basura temporal
         if compra.estado != 'borrador':
             messages.error(request, "Violación de seguridad: No puedes eliminar una factura que ya afectó el stock del Kardex.")
             return redirect('compra_list')
-            
         numero = compra.numero_comprobante
         compra.delete()
         messages.success(request, f"Borrador {numero} destruido permanentemente.")
-        
     return redirect('compra_list')
 
 
+def crear_venta_borrador(request: HttpRequest) -> HttpResponse:
+    cliente_base = Cliente.objects.first()
+    if not cliente_base:
+        messages.error(request, "Bloqueo del sistema: Debes registrar al menos un cliente antes de poder crear una factura.")
+        return redirect('dashboard')
+    nueva_venta = Venta.objects.create(
+        cliente=cliente_base,
+        estado='borrador',
+        tipo_documento='FCF'
+    )
+    return redirect('venta_detalle', pk=nueva_venta.pk)
 
+
+def venta_detalle(request: HttpRequest, pk: int) -> HttpResponse:
+    venta = get_object_or_404(Venta, pk=pk)
+    productos_disponibles = Producto.objects.filter(
+        activo=True,
+        es_vendible=True,
+        stock__gt=0
+    ).order_by('nombre')
+    context = {
+        'venta': venta,
+        'productos': productos_disponibles,
+    }
+    return render(request, 'core/venta_detalle.html', context)
+
+
+@require_POST
+def venta_agregar_producto(request: HttpRequest, pk: int) -> HttpResponse:
+    venta = get_object_or_404(Venta, pk=pk)
+    if venta.estado != 'borrador':
+        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
+    producto_id = request.POST.get('producto')
+    try:
+        cantidad = Decimal(request.POST.get('cantidad', 0))
+        descuento = Decimal(request.POST.get('descuento', 0))
+    except Exception:
+        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Valores numéricos inválidos.</td></tr>")
+    producto = get_object_or_404(Producto, id=producto_id)
+    if cantidad > producto.stock:
+        return HttpResponse(
+            f"<tr><td colspan='7' class='text-danger text-center fw-bold bg-red-lt'>¡Alerta! Intentas vender {cantidad} pero solo quedan {producto.stock} en Kardex. Venta bloqueada.</td></tr>"
+        )
+
+    DetalleVenta.objects.create(
+        venta=venta,
+        producto=producto,
+        cantidad=cantidad,
+        precio_unitario=producto.precio_venta,
+        descuento=descuento,
+        tipo_afectacion='gravada'
+    )
+    detalles = venta.detalles.all()
+    venta.refresh_from_db()
+    html = ""
+    for d in detalles:
+        html += f"""
+        <tr>
+            <td>{d.producto.nombre}</td>
+            <td>{d.cantidad}</td>
+            <td>${d.precio_unitario}</td>
+            <td>${d.descuento}</td>
+            <td>{d.get_tipo_afectacion_display()}</td>
+            <td class="fw-bold">${d.subtotal}</td>
+            <td>
+               <button hx-post="/ventas/detalle/{d.id}/eliminar/" 
+        hx-include="[name='csrfmiddlewaretoken']"
+        class="btn btn-sm btn-danger btn-icon">X</button>
+            </td>
+        </tr>
+        """
+    script_totales = f"""
+    <script>
+        var caja = document.getElementById('caja-totales');
+        if (caja) {{
+            caja.innerHTML = `
+                <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${venta.sumatoria_gravadas}</span></div>
+                <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${venta.sumatoria_exentas}</span></div>
+                <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${venta.iva}</span></div>
+                <h2 class="mb-0 text-success">Total: ${venta.total_pagar}</h2>
+            `;
+        }}
+    </script>
+    """
+    return HttpResponse(html + script_totales)
+
+
+@require_POST
+def venta_eliminar_producto(request: HttpRequest, detalle_id: int) -> HttpResponse:
+    detalle = get_object_or_404(DetalleVenta, id=detalle_id)
+    venta = detalle.venta
+    if venta.estado != 'borrador':
+        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
+    detalle.delete()
+    venta.refresh_from_db()
+    detalles = venta.detalles.all()
+    html = ""
+    if not detalles:
+        html = "<tr><td colspan='7' class='text-center text-muted py-5'>Factura en blanco. Selecciona un producto.</td></tr>"
+    else:
+        for d in detalles:
+            html += f"""
+            <tr>
+                <td>{d.producto.nombre}</td>
+                <td>{d.cantidad}</td>
+                <td>${d.precio_unitario}</td>
+                <td>${d.descuento}</td>
+                <td>{d.get_tipo_afectacion_display()}</td>
+                <td class="fw-bold">${d.subtotal}</td>
+                <td>
+                    <button hx-post="/ventas/detalle/{d.id}/eliminar/" 
+                    hx-include="[name='csrfmiddlewaretoken']"
+                    class="btn btn-sm btn-danger btn-icon">X</button>
+                </td>
+            </tr>
+            """
+    script_totales = f"""
+    <script>
+        var caja = document.getElementById('caja-totales');
+        if (caja) {{
+            caja.innerHTML = `
+                <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${venta.sumatoria_gravadas}</span></div>
+                <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${venta.sumatoria_exentas}</span></div>
+                <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${venta.iva}</span></div>
+                <h2 class="mb-0 text-success">Total: ${venta.total_pagar}</h2>
+            `;
+        }}
+    </script>
+    """
+    return HttpResponse(html + script_totales)

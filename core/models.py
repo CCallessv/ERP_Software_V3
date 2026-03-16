@@ -2,6 +2,11 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
+import uuid
+from decimal import Decimal
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.db.models import Sum
 
 class Cliente(models.Model):
     # Identificación
@@ -318,3 +323,125 @@ class DetalleCompra(models.Model):
 
     def __str__(self):
         return f"{self.cantidad} x {self.producto.nombre}"
+
+###################################################
+class Venta(models.Model):
+    ESTADOS = (
+        ('borrador', 'Borrador'),
+        ('completada', 'Completada'),
+        ('anulada', 'Anulada'),
+    )
+    
+    TIPO_DOC = (
+        ('FCF', 'Factura de Consumidor Final'),
+        ('CCF', 'Comprobante de Crédito Fiscal'),
+    )
+    
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT)
+    tipo_documento = models.CharField(max_length=3, choices=TIPO_DOC, default='FCF')
+
+    # CAMPOS ESTRICTOS PARA FACTURACIÓN ELECTRÓNICA (DTE)
+    codigo_generacion = models.UUIDField(default=uuid.uuid4, editable=False, null=True)
+    numero_control = models.CharField(max_length=40, unique=True, blank=True, null=True)
+    sello_recepcion = models.CharField(max_length=45, blank=True, null=True)
+
+    CONDICION_PAGO = (
+        ('contado', 'Contado'),
+        ('credito', 'Crédito'),
+    )
+    METODO_PAGO = (
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia Bancaria'),
+        ('tarjeta', 'Tarjeta de Crédito/Débito'),
+        ('cheque', 'Cheque'),
+        ('otro', 'Otro'),
+    )
+
+    condicion_pago = models.CharField(max_length=10, choices=CONDICION_PAGO, default='contado')
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO, default='efectivo')
+    dias_credito = models.PositiveIntegerField(default=0, help_text="Aplica solo si la condición es Crédito")
+    
+    # METADATOS Y OBSERVACIONES
+    numero_factura = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    fecha_hora_emision = models.DateTimeField(auto_now_add=True) # Modificado para capturar hora exacta
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
+    observaciones = models.TextField(blank=True, null=True) # Agregado para cumplir con el esquema
+    
+    # TOTALES GRANULARES
+    sumatoria_gravadas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    sumatoria_exentas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    sumatoria_no_sujetas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    descuento_global = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    # IMPUESTOS
+    iva = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) 
+    iva_percibido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    iva_retenido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    total_pagar = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"Venta {self.codigo_generacion} - {self.cliente.nombre}"
+
+
+class DetalleVenta(models.Model):
+    venta = models.ForeignKey(Venta, related_name='detalles', on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    
+    # CANTIDADES BASE
+    # Nota: Uso DecimalField en cantidad porque en alimentos a veces vendes "1.5 libras"
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2) 
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2) # Sin IVA si es CCF, Con IVA si es FCF
+    
+    # MODIFICADORES DE LÍNEA
+    descuento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    otros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    # CLASIFICACIÓN TRIBUTARIA (Reemplaza las 3 columnas del PDF)
+    TIPO_AFECTACION = (
+        ('gravada', 'Gravada'),
+        ('exenta', 'Exenta'),
+        ('no_sujeta', 'No Sujeta'),
+    )
+    tipo_afectacion = models.CharField(max_length=15, choices=TIPO_AFECTACION, default='gravada')
+    
+    # EL RESULTADO MATEMÁTICO FINAL DE LA LÍNEA
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+
+    def save(self, *args, **kwargs):
+        # La fórmula estricta según Hacienda: (Cantidad * Precio Unitario) - Descuento + Otros
+        base = (Decimal(str(self.cantidad)) * Decimal(str(self.precio_unitario)))
+        self.subtotal = base - Decimal(str(self.descuento)) + Decimal(str(self.otros))
+        super().save(*args, **kwargs)       
+
+# INTERCEPTOR TRIBUTARIO PARA EL SALVADOR
+@receiver(post_save, sender=DetalleVenta)
+@receiver(post_delete, sender=DetalleVenta)
+def actualizar_totales_venta(sender, instance, **kwargs):
+    venta = instance.venta
+    
+    # 1. Agrupamos los subtotales de las líneas según su afectación tributaria
+    totales = venta.detalles.aggregate(
+        gravadas=Sum('subtotal', filter=models.Q(tipo_afectacion='gravada')),
+        exentas=Sum('subtotal', filter=models.Q(tipo_afectacion='exenta')),
+        no_sujetas=Sum('subtotal', filter=models.Q(tipo_afectacion='no_sujeta'))
+    )
+
+    # 2. Asignamos ceros si la tabla de detalles está vacía o el filtro no encontró nada
+    venta.sumatoria_gravadas = totales['gravadas'] or Decimal('0.00')
+    venta.sumatoria_exentas = totales['exentas'] or Decimal('0.00')
+    venta.sumatoria_no_sujetas = totales['no_sujetas'] or Decimal('0.00')
+
+    # 3. Matemática de Impuestos (El IVA del 13% en SV solo aplica a las gravadas)
+    # Si la venta es de Consumidor Final (FCF), el IVA ya va incluido en el precio, no se suma aparte.
+    # Si es Crédito Fiscal (CCF), el IVA se calcula extra sobre el subtotal gravado.
+    if venta.tipo_documento == 'CCF':
+        venta.iva = (venta.sumatoria_gravadas * Decimal('0.13')).quantize(Decimal('0.01'))
+        venta.total_pagar = venta.sumatoria_gravadas + venta.sumatoria_exentas + venta.sumatoria_no_sujetas + venta.iva
+    else: # FCF
+        venta.iva = Decimal('0.00') # Para FCF en SV el IVA va oculto en el precio
+        venta.total_pagar = venta.sumatoria_gravadas + venta.sumatoria_exentas + venta.sumatoria_no_sujetas
+
+    # 4. Sellamos la cabecera en la base de datos
+    venta.save()        
