@@ -1,6 +1,5 @@
 from decimal import Decimal
 from typing import Any, Dict
-
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
@@ -10,6 +9,7 @@ from django.db.models import Q, Sum, F
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
+from django.db import transaction
 
 from .forms import (
     ProductoForm,
@@ -478,6 +478,9 @@ def compra_eliminar(request: HttpRequest, compra_id: int) -> HttpResponse:
     return redirect('compra_list')
 
 
+
+#MODULO DE VENTAS 
+
 def crear_venta_borrador(request: HttpRequest) -> HttpResponse:
     cliente_base = Cliente.objects.first()
     if not cliente_base:
@@ -491,8 +494,18 @@ def crear_venta_borrador(request: HttpRequest) -> HttpResponse:
     return redirect('venta_detalle', pk=nueva_venta.pk)
 
 
-def venta_detalle(request: HttpRequest, pk: int) -> HttpResponse:
-    venta = get_object_or_404(Venta, pk=pk)
+
+def venta_list(request):
+    # Ahora sí usamos el nombre real de tu campo de fecha en la base de datos
+    ventas = Venta.objects.all().order_by('-fecha_hora_emision')
+    
+    context = {
+        'ventas': ventas
+    }
+    return render(request, 'core/venta_list.html', context)
+
+def venta_detalle(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     productos_disponibles = Producto.objects.filter(
         activo=True,
         es_vendible=True,
@@ -506,8 +519,8 @@ def venta_detalle(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @require_POST
-def venta_agregar_producto(request: HttpRequest, pk: int) -> HttpResponse:
-    venta = get_object_or_404(Venta, pk=pk)
+def venta_agregar_producto(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     if venta.estado != 'borrador':
         return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
     producto_id = request.POST.get('producto')
@@ -608,3 +621,46 @@ def venta_eliminar_producto(request: HttpRequest, detalle_id: int) -> HttpRespon
     </script>
     """
     return HttpResponse(html + script_totales)
+
+
+
+@require_POST
+def venta_sellar(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    
+    # 1. Blindaje inicial
+    if venta.estado != 'borrador':
+        messages.error(request, 'Esta factura ya fue sellada o anulada.')
+        return redirect('venta_detalle', pk=venta.pk) # Ajusta el nombre de tu vista de detalle
+        
+    detalles = venta.detalles.all()
+    if not detalles.exists():
+        messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
+        return redirect('venta_detalle', pk=venta.pk)
+
+    # 2. Bloque Transaccional ACID (Todo o Nada)
+    try:
+        with transaction.atomic():
+            for detalle in detalles:
+                producto = detalle.producto
+                
+                # Verificación de stock de último microsegundo
+                if detalle.cantidad > producto.stock:
+                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Quedan {producto.stock}.")
+                
+                # Descuento del Kardex
+                producto.stock -= detalle.cantidad
+                producto.save()
+            
+            # 3. Cambio de estado de la factura
+            # Nota: Asegúrate de que tu modelo Venta use 'sellada' o 'completada' en las opciones de estado.
+            venta.estado = 'sellada' 
+            venta.save()
+            
+            messages.success(request, f'Documento sellado exitosamente. Se descontaron {detalles.count()} productos del Kardex.')
+            
+    except ValueError as e:
+        # Si algo falla, la transacción se revierte sola y mostramos el error
+        messages.error(request, str(e))
+        
+    return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)

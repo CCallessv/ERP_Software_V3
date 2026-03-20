@@ -382,7 +382,7 @@ class Venta(models.Model):
     total_pagar = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
-        return f"Venta {self.codigo_generacion} - {self.cliente.nombre}"
+        return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"
 
 
 class DetalleVenta(models.Model):

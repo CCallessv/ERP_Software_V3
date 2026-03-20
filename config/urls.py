@@ -20,7 +20,7 @@ from django.contrib.auth import views as auth_views
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar
-from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto
+from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -61,10 +61,15 @@ urlpatterns = [
     path('compras/<int:compra_id>/confirmar/', compra_confirmar, name='compra_confirmar'),
     path('compras/', compra_list, name='compra_list'),
     path('compras/<int:compra_id>/eliminar/', compra_eliminar, name='compra_eliminar'),
+    # === MÓDULO DE VENTAS ===
+    path('ventas/', venta_list, name='venta_list'),
     path('ventas/nueva/', crear_venta_borrador, name='crear_venta_borrador'),
-    path('ventas/<int:pk>/', venta_detalle, name='venta_detalle'),
-    path('ventas/<int:pk>/agregar-producto/', venta_agregar_producto, name='venta_agregar_producto'),
+    
+    # Usamos codigo_generacion como llave de seguridad
+    path('ventas/<uuid:codigo_generacion>/',venta_detalle, name='venta_detalle'),
+    path('ventas/<uuid:codigo_generacion>/agregar-producto/', venta_agregar_producto, name='venta_agregar_producto'),
     path('ventas/detalle/<int:detalle_id>/eliminar/', venta_eliminar_producto, name='venta_eliminar_producto'),
+    path('ventas/<uuid:codigo_generacion>/sellar/', venta_sellar, name='venta_sellar'),
    
 ]
 
