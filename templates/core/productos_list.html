@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="page-header d-print-none">
-  <div class="container-fluid">
+  <div class="container-xl">
     <div class="row g-2 align-items-center">
       <div class="col">
         <h2 class="page-title">Inventario</h2>
@@ -11,16 +11,6 @@
       </div>
       <div class="col-auto ms-auto d-print-none">
         <div class="btn-list">
-          <span class="d-none d-sm-inline">
-            <a href="#" class="btn btn-white">
-              <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>
-              Importar
-            </a>
-          </span>
-          <a href="#" class="btn btn-white d-none d-sm-inline-block">
-            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 -5l5 5" /><path d="M12 4l0 12" /></svg>
-            Exportar
-          </a>
           <button class="btn btn-primary d-none d-sm-inline-block" 
                   hx-get="{% url 'crear_producto' %}" 
                   hx-target="#dialog" 
@@ -36,11 +26,10 @@
 </div>
 
 <div class="page-body">
-  <div class="container-fluid">
+  <div class="container-xl">
     
     <div class="row row-cards mb-4">
-        
-        <div class="col-sm-6 col-lg-2">
+        <div class="col-sm-6 col-lg-4">
             <div class="card card-sm">
                 <div class="card-body">
                     <div class="row align-items-center">
@@ -57,7 +46,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-2">
+        
+        <div class="col-sm-6 col-lg-4">
             <div class="card card-sm">
                 <div class="card-body">
                     <div class="row align-items-center">
@@ -92,26 +82,14 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="card">
+    </div> <div class="card">
       <div class="card-body border-bottom py-3">
         <div class="d-flex">
           <div class="text-secondary">
-            <div class="input-icon">
-                <span class="input-icon-addon">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="10" cy="10" r="7" /><line x1="21" y1="21" x2="15" y2="15" /></svg>
-                </span>
-                <input type="text" class="form-control" placeholder="Buscar por nombre o SKU..." aria-label="Buscar en inventario">
+            Buscar:
+            <div class="ms-2 d-inline-block">
+                <input type="text" class="form-control form-control-sm" placeholder="Nombre o SKU...">
               </div>
-          </div>
-          <div class="ms-auto text-secondary">
-             <select class="form-select d-inline-block w-auto">
-                 <option>Todas las categorías</option>
-             </select>
-             <select class="form-select d-inline-block w-auto ms-2">
-                <option>Todos los tipos</option>
-            </select>
           </div>
         </div>
       </div>
@@ -133,23 +111,14 @@
           <tbody id="tabla-productos" 
                  hx-get="{% url 'productos_list' %}" 
                  hx-trigger="productoActualizado from:body">
-             
              {% include 'core/partials/producto_table_rows.html' %}
-             
           </tbody>
         </table>
       </div>
-      
-      <div class="card-footer d-flex align-items-center">
-        <p class="m-0 text-secondary">Mostrando <span>0</span> a <span>0</span> de <span>0</span> productos</p>
-        <ul class="pagination m-0 ms-auto">
-          <li class="page-item disabled"><a class="page-link" href="#">prev</a></li>
-          <li class="page-item disabled"><a class="page-link" href="#">next</a></li>
-        </ul>
-      </div>
+    </div> </div> </div> <div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog">
     </div>
-
-  </div>
 </div>
+
 <script src="{% static 'js/dropdown_AccionesProductos.js' %}"></script>
 {% endblock %}

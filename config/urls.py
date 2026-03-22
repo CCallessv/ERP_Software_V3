@@ -20,7 +20,7 @@ from django.contrib.auth import views as auth_views
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar
-from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list
+from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -70,6 +70,7 @@ urlpatterns = [
     path('ventas/<uuid:codigo_generacion>/agregar-producto/', venta_agregar_producto, name='venta_agregar_producto'),
     path('ventas/detalle/<int:detalle_id>/eliminar/', venta_eliminar_producto, name='venta_eliminar_producto'),
     path('ventas/<uuid:codigo_generacion>/sellar/', venta_sellar, name='venta_sellar'),
+    path('ventas/<uuid:codigo_generacion>/pdf/', generar_pdf_venta, name='venta_pdf'),
    
 ]
 

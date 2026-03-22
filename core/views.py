@@ -10,6 +10,8 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
 from django.db import transaction
+from django.template.loader import get_template
+from xhtml2pdf import pisa
 
 from .forms import (
     ProductoForm,
@@ -491,7 +493,7 @@ def crear_venta_borrador(request: HttpRequest) -> HttpResponse:
         estado='borrador',
         tipo_documento='FCF'
     )
-    return redirect('venta_detalle', pk=nueva_venta.pk)
+    return redirect('venta_detalle', codigo_generacion=nueva_venta.codigo_generacion)
 
 
 
@@ -664,3 +666,28 @@ def venta_sellar(request, codigo_generacion):
         messages.error(request, str(e))
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+
+def generar_pdf_venta(request, codigo_generacion):
+    # Traemos la venta y sus detalles
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    
+    # Le decimos a Django que usaremos una plantilla HTML específica para el PDF
+    template_path = 'core/venta_pdf.html'
+    context = {'venta': venta}
+    
+    # Preparamos la respuesta como un archivo PDF
+    response = HttpResponse(content_type='application/pdf')
+    # "inline" abre el PDF en el navegador. Si quieres que se descargue directo, usa "attachment"
+    response['Content-Disposition'] = f'inline; filename="Documento_{venta.codigo_generacion}.pdf"'
+    
+    # Renderizamos el HTML con los datos de la venta
+    template = get_template(template_path)
+    html = template.render(context)
+    
+    # Creamos el PDF
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    
+    if pisa_status.err:
+        return HttpResponse('Hubo un error al generar el PDF: <pre>' + html + '</pre>')
+    return response    

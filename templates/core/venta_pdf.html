@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Documento {{ venta.codigo_generacion }}</title>
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 2cm;
+        }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #333333;
+        }
+        .header-table {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .header-table td {
+            vertical-align: top;
+        }
+        .company-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .doc-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: right;
+            color: #0f172a;
+            text-transform: uppercase;
+        }
+        .info-box {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .info-table {
+            width: 100%;
+        }
+        .info-table td {
+            padding: 3px 0;
+        }
+        .bold { font-weight: bold; }
+        
+        /* Tabla de Productos */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .items-table th {
+            background-color: #f1f5f9;
+            border: 1px solid #94a3b8;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .items-table td {
+            border: 1px solid #cbd5e1;
+            padding: 6px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        
+        /* Tabla de Totales */
+        .totals-table {
+            width: 40%;
+            float: right;
+            margin-top: 15px;
+            border-collapse: collapse;
+        }
+        .totals-table td {
+            padding: 6px;
+            border: 1px solid #cbd5e1;
+        }
+        .totals-table .total-row {
+            background-color: #f8fafc;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td width="50%">
+                <div class="company-name">ERP S.A. DE C.V.</div>
+                <div>Giro: Venta de Software y Servicios</div>
+                <div>NIT: 0614-010190-101-1 | NRC: 123456-7</div>
+                <div>San Salvador, El Salvador</div>
+            </td>
+            <td width="50%">
+                <div class="doc-title">{{ venta.get_tipo_documento_display }}</div>
+                <div style="text-align: right; margin-top: 5px;">
+                    <span class="bold">UUID:</span> {{ venta.codigo_generacion }}<br>
+                    <span class="bold">Fecha:</span> {{ venta.fecha_hora_emision|date:"d/m/Y H:i" }}<br>
+                    <span class="bold">Condición:</span> {{ venta.get_condicion_pago_display }}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="info-box">
+        <table class="info-table">
+            <tr>
+                <td width="15%" class="bold">Cliente:</td>
+                <td width="50%">{{ venta.cliente.nombres }}</td>
+                <td width="15%" class="bold">NIT/DUI:</td>
+                <td width="20%">{{ venta.cliente.documento|default:"N/A" }}</td>
+            </tr>
+            <tr>
+                <td class="bold">Dirección:</td>
+                <td>{{ venta.cliente.direccion|default:"N/A" }}</td>
+                <td class="bold">NRC:</td>
+                <td>{{ venta.cliente.nrc|default:"N/A" }}</td>
+            </tr>
+            <tr>
+                <td class="bold">Giro:</td>
+                <td colspan="3">{{ venta.cliente.giro|default:"N/A" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th width="10%">CANT.</th>
+                <th width="45%">DESCRIPCIÓN</th>
+                <th width="15%">P. UNIT.</th>
+                <th width="15%">EXENTAS</th>
+                <th width="15%">GRAVADAS</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for detalle in venta.detalles.all %}
+            <tr>
+                <td class="text-center">{{ detalle.cantidad }}</td>
+                <td>{{ detalle.producto.nombres|default:detalle.producto.nombre }}</td>
+                <td class="text-right">${{ detalle.precio_unitario }}</td>
+                <td class="text-right">
+                    {% if detalle.tipo_afectacion == 'exenta' %}
+                        ${{ detalle.subtotal }}
+                    {% else %}
+                        $0.00
+                    {% endif %}
+                </td>
+                <td class="text-right">
+                    {% if detalle.tipo_afectacion == 'gravada' %}
+                        ${{ detalle.subtotal }}
+                    {% else %}
+                        $0.00
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">No hay productos en este documento.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table class="totals-table">
+        <tr>
+            <td>Sumatoria Gravadas:</td>
+            <td class="text-right">${{ venta.sumatoria_gravadas }}</td>
+        </tr>
+        <tr>
+            <td>Sumatoria Exentas:</td>
+            <td class="text-right">${{ venta.sumatoria_exentas }}</td>
+        </tr>
+        {% if venta.tipo_documento == 'CCF' %}
+        <tr>
+            <td>IVA (13%):</td>
+            <td class="text-right">${{ venta.iva }}</td>
+        </tr>
+        {% endif %}
+        <tr class="total-row">
+            <td>TOTAL A PAGAR:</td>
+            <td class="text-right">${{ venta.total_pagar }}</td>
+        </tr>
+    </table>
+
+    <div style="clear: both;"></div>
+
+    <div style="margin-top: 50px; text-align: center; font-size: 10px; color: #64748b;">
+        Este documento es una representación impresa de un Comprobante Electrónico (DTE).<br>
+        Generado por ERP Software.
+    </div>
+
+</body>
+</html>
