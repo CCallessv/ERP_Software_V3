@@ -274,6 +274,8 @@ class MovimientoInventario(models.Model):
         super().save(*args, **kwargs)
 #########################################################################
 class Compra(models.Model):
+
+    
     ESTADO_COMPRA = [
         ('borrador', 'Borrador (No afecta stock)'),
         ('completada', 'Completada (Stock actualizado)'),
@@ -285,7 +287,7 @@ class Compra(models.Model):
         ('factura', 'Factura de Consumidor Final'),
         ('recibo', 'Recibo / Otro'),
     ]
-
+    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name='compras')
     fecha_compra = models.DateField(default=timezone.now, verbose_name="Fecha de Compra")
     tipo_comprobante = models.CharField(max_length=20, choices=TIPO_COMPROBANTE, default='ccf')
@@ -303,9 +305,11 @@ class Compra(models.Model):
 
     class Meta:
         ordering = ['-fecha_compra', '-id']
+        # Evita ingresar la misma factura del mismo proveedor 2 veces
+        unique_together = ['proveedor', 'numero_comprobante']
 
     def __str__(self):
-        return f"Compra {self.numero_comprobante} - {self.proveedor.nombre_empresa}"
+        return f"Compra {self.numero_comprobante} - {self.proveedor.nombre_comercial}"
 
 ##############################################################################
 class DetalleCompra(models.Model):

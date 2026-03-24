@@ -42,7 +42,7 @@
                             <div class="font-weight-medium">{{ compra.numero_comprobante }}</div>
                             <div class="text-secondary text-truncate mt-n1">{{ compra.get_tipo_comprobante_display }}</div>
                         </td>
-                        <td>{{ compra.proveedor.nombre_comercial }}</td>
+                        <td>{{ compra.proveedor.nombre_comercial|default:"N/A" }}</td>
                         <td>
                             {% if compra.estado == 'borrador' %}
                                 <span class="badge bg-warning text-warning-fg">Borrador</span>
@@ -53,49 +53,49 @@
                             {% endif %}
                         </td>
                         <td class="font-weight-bold text-green">${{ compra.total|floatformat:2 }}</td>
-                        <td>
-                            <div class="btn-list flex-nowrap">
-                                <a href="{% url 'compra_detalle' compra.pk %}" class="btn btn-sm btn-outline-primary">
+                        <td class="text-center w-1">
+                            <div class="d-flex justify-content-center align-items-center gap-2">
+                                <a href="{% url 'compra_detalle' id_publico=compra.id_publico %}" class="btn btn-sm btn-outline-secondary">
                                     Abrir
                                 </a>
                                 
                                 {% if compra.estado == 'borrador' %}
-                                <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-eliminar-{{ compra.pk }}">
-                                    Eliminar
-                                </button>
-
-                                <div class="modal modal-blur fade" id="modal-eliminar-{{ compra.pk }}" tabindex="-1" role="dialog" aria-hidden="true">
-                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-                                        <div class="modal-content">
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            <div class="modal-status bg-danger"></div>
-                                            <div class="modal-body text-center py-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
-                                                <h3>¿Estás seguro?</h3>
-                                                <div class="text-secondary">¿Deseas destruir el borrador <strong>{{ compra.numero_comprobante }}</strong>? Esta acción lo eliminará del sistema permanentemente.</div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <div class="w-100">
-                                                    <div class="row">
-                                                        <div class="col">
-                                                            <button type="button" class="btn w-100" data-bs-dismiss="modal">
-                                                                Cancelar
-                                                            </button>
-                                                        </div>
-                                                        <div class="col">
-                                                            <form action="{% url 'compra_eliminar' compra.pk %}" method="POST">
-                                                                {% csrf_token %}
-                                                                <button type="submit" class="btn btn-danger w-100">
-                                                                    Sí, destruir
+                                    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-eliminar-{{ compra.id_publico }}">
+                                        Eliminar
+                                    </button>
+                        
+                                    <div class="modal modal-blur fade text-start" id="modal-eliminar-{{ compra.id_publico }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                            <div class="modal-content">
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                <div class="modal-status bg-danger"></div>
+                                                <div class="modal-body text-center py-4">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+                                                    <h3>¿Estás seguro?</h3>
+                                                    <div class="text-secondary">¿Deseas destruir el borrador <strong>{{ compra.numero_comprobante }}</strong>? Esta acción lo eliminará del sistema permanentemente.</div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <div class="w-100">
+                                                        <div class="row">
+                                                            <div class="col">
+                                                                <button type="button" class="btn w-100" data-bs-dismiss="modal">
+                                                                    Cancelar
                                                                 </button>
-                                                            </form>
+                                                            </div>
+                                                            <div class="col">
+                                                                <form action="{% url 'compra_eliminar' id_publico=compra.id_publico %}" method="POST">
+                                                                    {% csrf_token %}
+                                                                    <button type="submit" class="btn btn-danger w-100">
+                                                                        Sí, destruir
+                                                                    </button>
+                                                                </form>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
                                 {% endif %}
                             </div>
                         </td>

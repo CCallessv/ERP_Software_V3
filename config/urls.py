@@ -54,14 +54,18 @@ urlpatterns = [
     path('categorias/eliminar/<int:pk>/', eliminar_categoria, name='eliminar_categoria'),
     #Aca se gestionara lo q son las presentaciones de cada producto
     path('inventario/presentaciones/<int:pk>/', gestionar_presentaciones, name='gestionar_presentaciones'),
-    path('compras/nueva/', crear_compra, name='crear_compra'),
-    path('compras/<int:pk>/detalle/', compra_detalle, name='compra_detalle'),
-    path('compras/<int:compra_id>/detalle/crear/', detalle_compra_crear, name='detalle_compra_crear'),
-    path('compras/detalle/<int:detalle_id>/eliminar/', detalle_compra_eliminar, name='detalle_compra_eliminar'),
-    path('compras/<int:compra_id>/confirmar/', compra_confirmar, name='compra_confirmar'),
+
+   # === MÓDULO DE COMPRAS ===
     path('compras/', compra_list, name='compra_list'),
-    path('compras/<int:compra_id>/eliminar/', compra_eliminar, name='compra_eliminar'),
-    # === MÓDULO DE VENTAS ===
+    path('compras/nueva/', crear_compra, name='crear_compra'),
+    path('compras/<uuid:id_publico>/detalle/', compra_detalle, name='compra_detalle'),
+    path('compras/<uuid:id_publico>/detalle/crear/', detalle_compra_crear, name='detalle_compra_crear'),
+    
+    # Nota: Este es el UNICO que se queda con <int> porque borra una fila de producto, no la compra entera.
+    path('compras/detalle/<int:detalle_id>/eliminar/', detalle_compra_eliminar, name='detalle_compra_eliminar'), 
+    
+    path('compras/<uuid:id_publico>/confirmar/', compra_confirmar, name='compra_confirmar'),
+    path('compras/<uuid:id_publico>/eliminar/', compra_eliminar, name='compra_eliminar'),
     path('ventas/', venta_list, name='venta_list'),
     path('ventas/nueva/', crear_venta_borrador, name='crear_venta_borrador'),
     

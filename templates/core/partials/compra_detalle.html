@@ -35,7 +35,7 @@
     {% if compra.estado == 'borrador' %}
     <div class="card mb-3">
         <div class="card-body">
-            <form hx-post="{% url 'detalle_compra_crear' compra.pk %}"
+            <form hx-post="{% url 'detalle_compra_crear' compra.id_publico %}"
                 hx-target="#compra-detalle-container"
                 hx-swap="outerHTML"
                 hx-select="#compra-detalle-container"  autocomplete="off">
@@ -116,7 +116,7 @@
         
         <div class="card-footer text-end">
             {% if compra.estado == 'borrador' %}
-            <form action="{% url 'compra_confirmar' compra.pk %}" method="POST">
+            <form action="{% url 'compra_confirmar' compra.id_publico %}" method="POST">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-success" {% if not detalles %}disabled{% endif %}>
                     Confirmar e Ingresar al Kardex

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <h2 class="page-title">Dashboard</h2>
+        <div class="text-secondary mt-1">Resumen del mes actual</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+    
+    <div class="row row-cards mb-4">
+      
+      <div class="col-sm-6 col-lg-3">
+        <div class="card text-white" style="background-color: #1e4b7a;">
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+              <div class="subheader text-white">Valor de Inventario</div>
+            </div>
+            <div class="h1 mb-1">${{ valor_inventario|floatformat:2 }}</div>
+            <div class="text-white opacity-75 text-sm">Activos valorizados</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card text-white bg-twitter">
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+              <div class="subheader text-white">Ventas del Período</div>
+            </div>
+            <div class="h1 mb-1">${{ total_ventas|floatformat:2 }}</div>
+            <div class="text-white opacity-75 text-sm">{{ cantidad_ventas }} ventas cerradas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card text-white bg-orange">
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+              <div class="subheader text-white">Compras del Período</div>
+            </div>
+            <div class="h1 mb-1">${{ total_compras|floatformat:2 }}</div>
+            <div class="text-white opacity-75 text-sm">{{ cantidad_compras }} órdenes completadas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-3">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+              <div class="subheader">Stock Bajo</div>
+            </div>
+            <div class="d-flex align-items-baseline">
+              <div class="h1 mb-1 me-2">{{ stock_bajo }}</div>
+              <div class="me-auto">
+                <span class="text-yellow d-inline-flex align-items-center lh-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+                </span>
+              </div>
+            </div>
+            <div class="text-secondary text-sm">Productos en alerta</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Últimas Transacciones (Ventas)</h3>
+      </div>
+      <div class="table-responsive">
+        <table class="table card-table table-vcenter text-nowrap datatable">
+          <thead>
+            <tr>
+              <th>UUID Documento</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Total</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for venta in ultimas_ventas %}
+            <tr>
+              <td><span class="text-secondary">{{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}...</span></td>
+              <td>{{ venta.cliente.nombres }}</td>
+              <td>{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
+              <td class="font-weight-bold">${{ venta.total_pagar }}</td>
+              <td><span class="badge bg-success me-1"></span> {{ venta.get_estado_display|title }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-secondary">Aún no hay ventas registradas este mes.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

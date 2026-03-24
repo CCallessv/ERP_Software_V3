@@ -12,6 +12,8 @@ from django.views.decorators.http import require_POST
 from django.db import transaction
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+from django.utils import timezone
+from .models import Producto, Venta
 
 from .forms import (
     ProductoForm,
@@ -34,16 +36,59 @@ from .models import (
     DetalleVenta,
 )
 
-
 @login_required
-def home(request: HttpRequest) -> HttpResponse:
-    total_productos = Producto.objects.count()
-    total_categorias = Categoria.objects.count()
+def home(request):
+    # 1. Obtenemos el mes y año actual
+    hoy = timezone.now()
+    mes_actual = hoy.month
+    anio_actual = hoy.year
+
+    # 2. Valor del Inventario
+    inventario = Producto.objects.aggregate(
+        valor_total=Sum(F('stock') * F('precio_costo')) 
+    )
+    valor_inventario = inventario['valor_total'] or 0
+
+    # 3. Ventas del Período
+    ventas_mes = Venta.objects.filter(
+        fecha_hora_emision__month=mes_actual,
+        fecha_hora_emision__year=anio_actual,
+        estado='sellada'
+    )
+    total_ventas = ventas_mes.aggregate(total=Sum('total_pagar'))['total'] or 0
+    cantidad_ventas = ventas_mes.count()
+
+    # --- NUEVO: 3.5 Compras del Período ---
+    # Asumo que en tu modelo Compra la fecha se llama 'fecha_emision' 
+    # y el total se llama 'total' (basado en el código que me pasaste antes).
+    # --- NUEVO: 3.5 Compras del Período ---
+    compras_mes = Compra.objects.filter(
+        fecha_compra__month=mes_actual,  # <-- CAMBIO AQUÍ
+        fecha_compra__year=anio_actual,  # <-- CAMBIO AQUÍ
+        estado='completada'
+    )
+    total_compras = compras_mes.aggregate(total_suma=Sum('total'))['total_suma'] or 0
+    cantidad_compras = compras_mes.count()
+    # --------------------------------------
+    # --------------------------------------
+
+    # 4. Alertas de Stock Bajo
+    stock_bajo = Producto.objects.filter(stock__lte=5).count()
+
+    # 5. Últimas Transacciones (Ventas)
+    ultimas_ventas = Venta.objects.filter(estado='sellada').order_by('-fecha_hora_emision')[:5]
+
     context: Dict[str, Any] = {
-        'total_productos': total_productos,
-        'total_categorias': total_categorias,
+        'valor_inventario': valor_inventario,
+        'total_ventas': total_ventas,
+        'cantidad_ventas': cantidad_ventas,
+        'total_compras': total_compras,       # Inyectamos el total de compras
+        'cantidad_compras': cantidad_compras, # Inyectamos la cantidad de ordenes
+        'stock_bajo': stock_bajo,
+        'ultimas_ventas': ultimas_ventas,
     }
-    return render(request, 'base.html', context)
+    
+    return render(request, 'core/home.html', context)
 
 
 def exit(request: HttpRequest) -> HttpResponse:
@@ -337,7 +382,7 @@ def gestionar_presentaciones(request: HttpRequest, pk: int) -> HttpResponse:
         'form': form
     })
 
-
+#Modulo de COMPRAS
 @login_required
 def crear_compra(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
@@ -347,15 +392,19 @@ def crear_compra(request: HttpRequest) -> HttpResponse:
             nueva_compra.usuario = request.user
             nueva_compra.estado = 'borrador'
             nueva_compra.save()
-            return redirect('compra_detalle', pk=nueva_compra.pk)
+            return redirect('compra_detalle', id_publico=nueva_compra.id_publico) 
+
+        else:
+            # ESTA LÍNEA TE DIRÁ EXACTAMENTE QUÉ ESTÁ FALLANDO
+            print("ERRORES DEL FORMULARIO:", form.errors)
     else:
         form = CompraForm()
     return render(request, 'core/partials/compra_form.html', {'form': form})
 
 
 @login_required
-def compra_detalle(request: HttpRequest, pk: int) -> HttpResponse:
-    compra = get_object_or_404(Compra, pk=pk)
+def compra_detalle(request: HttpRequest, id_publico) -> HttpResponse: 
+    compra = get_object_or_404(Compra, id_publico=id_publico) 
     detalles = DetalleCompra.objects.filter(compra=compra)
     form = DetalleCompraForm()
     context = {
@@ -367,8 +416,8 @@ def compra_detalle(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
-def detalle_compra_crear(request: HttpRequest, compra_id: int) -> HttpResponse:
-    compra = get_object_or_404(Compra, pk=compra_id)
+def detalle_compra_crear(request: HttpRequest, id_publico) -> HttpResponse: 
+    compra = get_object_or_404(Compra, id_publico=id_publico)
     if request.method == 'POST':
         form = DetalleCompraForm(request.POST)
         if form.is_valid():
@@ -398,11 +447,11 @@ def detalle_compra_crear(request: HttpRequest, compra_id: int) -> HttpResponse:
 
 @login_required
 def detalle_compra_eliminar(request: HttpRequest, detalle_id: int) -> HttpResponse:
+    # Esta función borra el DETALLE, por eso mantiene el detalle_id (int)
     detalle = get_object_or_404(DetalleCompra, pk=detalle_id)
     compra = detalle.compra
     if request.method == 'POST':
         detalle.delete()
-        total_calculado = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
         suma_subtotales = DetalleCompra.objects.filter(compra=compra).aggregate(Sum('subtotal'))['subtotal__sum'] or 0
         subtotal_decimal = Decimal(str(suma_subtotales)).quantize(Decimal('0.01'))
         if compra.tipo_comprobante == 'ccf':
@@ -424,16 +473,16 @@ def detalle_compra_eliminar(request: HttpRequest, detalle_id: int) -> HttpRespon
 
 
 @login_required
-def compra_confirmar(request: HttpRequest, compra_id: int) -> HttpResponse:
-    compra = get_object_or_404(Compra, pk=compra_id)
+def compra_confirmar(request: HttpRequest, id_publico) -> HttpResponse:
+    compra = get_object_or_404(Compra, id_publico=id_publico)
     if request.method == 'POST':
         if compra.estado != 'borrador':
             messages.error(request, "Esta factura ya fue ingresada al Kardex y está bloqueada.")
-            return redirect('compra_detalle', pk=compra.pk)
+            return redirect('compra_detalle', id_publico=compra.id_publico)
         detalles = DetalleCompra.objects.filter(compra=compra)
         if not detalles.exists():
             messages.error(request, "No puedes procesar una factura sin productos.")
-            return redirect('compra_detalle', pk=compra.pk)
+            return redirect('compra_detalle', id_publico=compra.id_publico)
         try:
             with transaction.atomic():
                 for detalle in detalles:
@@ -455,7 +504,7 @@ def compra_confirmar(request: HttpRequest, compra_id: int) -> HttpResponse:
             messages.success(request, "Factura procesada. Inventario y costos actualizados correctamente.")
         except Exception as e:
             messages.error(request, f"Error crítico de base de datos: {e}")
-    return redirect('compra_detalle', pk=compra.pk)
+    return redirect('compra_detalle', id_publico=compra.id_publico)
 
 
 @login_required
@@ -468,8 +517,8 @@ def compra_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-def compra_eliminar(request: HttpRequest, compra_id: int) -> HttpResponse:
-    compra = get_object_or_404(Compra, pk=compra_id)
+def compra_eliminar(request: HttpRequest, id_publico) -> HttpResponse:
+    compra = get_object_or_404(Compra, id_publico=id_publico)
     if request.method == 'POST':
         if compra.estado != 'borrador':
             messages.error(request, "Violación de seguridad: No puedes eliminar una factura que ya afectó el stock del Kardex.")
@@ -478,6 +527,7 @@ def compra_eliminar(request: HttpRequest, compra_id: int) -> HttpResponse:
         compra.delete()
         messages.success(request, f"Borrador {numero} destruido permanentemente.")
     return redirect('compra_list')
+
 
 
 
