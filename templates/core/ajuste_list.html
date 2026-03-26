@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-2 align-items-center">
+      <div class="col">
+        <h2 class="page-title">Ajustes de Inventario</h2>
+        <div class="text-secondary mt-1">Historial de mermas, daños, devoluciones y correcciones.</div>
+      </div>
+      <div class="col-auto ms-auto d-print-none">
+        <button class="btn btn-warning" 
+                hx-get="{% url 'crear_ajuste' %}" 
+                hx-target="#dialog" 
+                data-bs-toggle="modal"
+                data-bs-target="#modal-generic">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+            Nuevo Ajuste
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table card-table table-vcenter text-nowrap datatable">
+          <thead>
+            <tr>
+              <th>FECHA</th>
+              <th>PRODUCTO</th>
+              <th>TIPO</th>
+              <th>CANTIDAD</th>
+              <th>MOTIVO</th>
+              <th>USUARIO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ajuste in ajustes %}
+            <tr>
+                <td>{{ ajuste.fecha|date:"d/m/Y H:i" }}</td>
+                <td class="font-weight-bold">{{ ajuste.producto.nombre }}</td>
+                <td>
+                    {% if ajuste.tipo == 'entrada' %}
+                        <span class="badge bg-success-lt">Entrada</span>
+                    {% else %}
+                        <span class="badge bg-danger-lt">Salida</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ajuste.tipo == 'entrada' %}+{% else %}-{% endif %}{{ ajuste.cantidad }}
+                </td>
+                <td class="text-secondary text-truncate" style="max-width: 250px;" title="{{ ajuste.motivo }}">
+                    {{ ajuste.motivo }}
+                </td>
+                <td>{{ ajuste.usuario.username }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-secondary py-4">No hay ajustes manuales registrados.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog">
+    </div>
+</div>
+{% endblock %}

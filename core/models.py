@@ -448,4 +448,42 @@ def actualizar_totales_venta(sender, instance, **kwargs):
         venta.total_pagar = venta.sumatoria_gravadas + venta.sumatoria_exentas + venta.sumatoria_no_sujetas
 
     # 4. Sellamos la cabecera en la base de datos
-    venta.save()        
+    venta.save()      
+
+
+class AjusteInventario(models.Model):
+    TIPO_AJUSTE = [
+        ('entrada', 'Entrada (Sobrante / Devolución a favor)'),
+        ('salida', 'Salida (Merma / Daño / Vencimiento)'),
+    ]
+
+    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='ajustes')
+    tipo = models.CharField(max_length=10, choices=TIPO_AJUSTE)
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2, help_text="Cantidad a ajustar")
+    motivo = models.CharField(max_length=255, help_text="Ej: Deterioro del producto")
+    
+    fecha = models.DateTimeField(default=timezone.now)
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"Ajuste {self.get_tipo_display()} - {self.producto.nombre} ({self.cantidad})"
+
+    def save(self, *args, **kwargs):
+        # El ajuste de stock ocurre automáticamente al guardar
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        if is_new:
+            if self.tipo == 'entrada':
+                self.producto.stock += self.cantidad
+            elif self.tipo == 'salida':
+                # Evitamos stock negativo
+                if self.producto.stock >= self.cantidad:
+                    self.producto.stock -= self.cantidad
+                else:
+                    raise ValueError("No puedes retirar más stock del que existe.")
+            self.producto.save()      

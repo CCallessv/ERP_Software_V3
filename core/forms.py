@@ -1,6 +1,6 @@
 from django import forms
 import re
-from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto, Compra,DetalleCompra
+from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto, Compra,DetalleCompra,AjusteInventario
 #Django necesita saber cómo validar los datos antes de guardarlos entonces Vamos a crear un archivo para "traducir" el modelo a HTML.
 class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario que vamos a usar en la vista
     class Meta: # Meta es un diccionario que contiene la configuración del formulario
@@ -162,3 +162,28 @@ class DetalleCompraForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Solo mostrar productos que estén activos en el inventario
         self.fields['producto'].queryset = Producto.objects.filter(activo=True)        
+
+
+class ProductoConStockChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        # Aquí definimos exactamente cómo se lee cada opción en el dropdown
+        return f"{obj.nombre} ({obj.codigo}) — Stock actual: {obj.stock}"
+
+class AjusteInventarioForm(forms.ModelForm):
+    # Forzamos al formulario a usar nuestro campo personalizado
+    producto = ProductoConStockChoiceField(
+        queryset=Producto.objects.filter(activo=True), 
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    class Meta:
+        model = AjusteInventario
+        fields = ['producto', 'tipo', 'cantidad', 'motivo']
+        widgets = {
+            # OJO: Quitamos 'producto' de aquí adentro porque ya lo definimos arriba
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'motivo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Producto dañado, devolución, etc.'}),
+        }
+
+

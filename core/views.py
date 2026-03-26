@@ -23,6 +23,7 @@ from .forms import (
     PresentacionForm,
     CompraForm,
     DetalleCompraForm,
+    AjusteInventarioForm,
 )
 from .models import (
     Producto,
@@ -34,6 +35,7 @@ from .models import (
     Venta,
     Cliente,
     DetalleVenta,
+    AjusteInventario,
 )
 
 @login_required
@@ -202,7 +204,7 @@ def crear_producto(request: HttpRequest) -> HttpResponse:
             response['HX-Trigger'] = 'productoActualizado'
             return response
         else:
-            print("❌ ERRORES DE PRODUCTO:", form.errors)
+            print(" ERRORES DE PRODUCTO:", form.errors)
     else:
         form = ProductoForm()
     return render(request, 'core/partials/producto_form.html', {'form': form, 'titulo_modal': 'Nuevo Producto'})
@@ -329,7 +331,7 @@ def crear_categoria(request: HttpRequest) -> HttpResponse:
             response['HX-Refresh'] = 'true'
             return response
         else:
-            print("❌ ERRORES DE VALIDACIÓN:", form.errors)
+            print(" ERRORES DE VALIDACIÓN:", form.errors)
     else:
         form = CategoriaForm()
     return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Nueva Categoría'})
@@ -395,7 +397,7 @@ def crear_compra(request: HttpRequest) -> HttpResponse:
             return redirect('compra_detalle', id_publico=nueva_compra.id_publico) 
 
         else:
-            # ESTA LÍNEA TE DIRÁ EXACTAMENTE QUÉ ESTÁ FALLANDO
+            
             print("ERRORES DEL FORMULARIO:", form.errors)
     else:
         form = CompraForm()
@@ -741,3 +743,31 @@ def generar_pdf_venta(request, codigo_generacion):
     if pisa_status.err:
         return HttpResponse('Hubo un error al generar el PDF: <pre>' + html + '</pre>')
     return response    
+
+
+@login_required
+def ajuste_list(request):
+    ajustes = AjusteInventario.objects.select_related('producto', 'usuario').all()
+    return render(request, 'core/ajuste_list.html', {'ajustes': ajustes})
+
+@login_required
+def crear_ajuste(request):
+    if request.method == 'POST':
+        form = AjusteInventarioForm(request.POST)
+        if form.is_valid():
+            try:
+                ajuste = form.save(commit=False)
+                ajuste.usuario = request.user
+                ajuste.save() # El modelo actualizará el stock automáticamente
+                messages.success(request, f"Ajuste registrado: {ajuste.get_tipo_display()} aplicado al Kardex.")
+                # Asegúrate de importar HttpResponseClientRefresh de django_htmx si usas HTMX, o simplemente recarga
+                return redirect('ajuste_list')
+            except ValueError as e:
+                # Captura el error si el stock queda en negativo
+                messages.error(request, str(e))
+        else:
+            messages.error(request, "Revisa los datos del formulario.")
+    else:
+        form = AjusteInventarioForm()
+    
+    return render(request, 'core/partials/ajuste_form.html', {'form': form})
