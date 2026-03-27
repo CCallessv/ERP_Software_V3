@@ -20,7 +20,7 @@ from django.contrib.auth import views as auth_views
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar
-from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste
+from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,abrir_sesion_caja,cerrar_sesion_caja
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -79,6 +79,9 @@ urlpatterns = [
     # === MODULO DE INVENTARIO / AJUSTES ===
     path('ajustes/', ajuste_list, name='ajuste_list'),
     path('ajustes/nuevo/',  crear_ajuste, name='crear_ajuste'),
+    # === MODULO DE CAJA ===
+    path('caja/abrir/', abrir_sesion_caja, name='abrir_sesion'),
+    path('caja/cerrar/', cerrar_sesion_caja, name='cerrar_sesion'),
    
 ]
 

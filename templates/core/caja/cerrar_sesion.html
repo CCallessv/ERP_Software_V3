@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-body">
+  <div class="container-xl d-flex flex-column justify-content-center align-items-center" style="min-height: 70vh;">
+    
+    <div class="card shadow-sm" style="max-width: 500px; width: 100%;">
+      <div class="card-header bg-danger text-white">
+        <h3 class="card-title text-white">Cierre y Arqueo de Caja</h3>
+      </div>
+      <div class="card-body">
+        
+        <div class="alert alert-warning" role="alert">
+          Cuenta todo el dinero físico que hay en tu gaveta e ingrésalo abajo. Una vez cerrado el turno, no podrás modificar esta información ni realizar más ventas.
+        </div>
+
+        <div class="row mb-4 text-center">
+            <div class="col-6 border-end">
+                <div class="text-secondary mb-1">Fondo Inicial</div>
+                <div class="fs-3 fw-bold">${{ sesion.saldo_inicial }}</div>
+            </div>
+            <div class="col-6">
+                <div class="text-secondary mb-1">Saldo Esperado por Sistema</div>
+                <div class="fs-3 fw-bold text-primary">${{ sesion.saldo_esperado }}</div>
+            </div>
+        </div>
+
+        <form method="POST">
+          {% csrf_token %}
+          
+          <div class="mb-4">
+            <label class="form-label fw-bold">{{ form.saldo_real.label }}</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light">$</span>
+              {{ form.saldo_real }}
+            </div>
+          </div>
+          
+          <div class="form-footer mt-4">
+            <button type="submit" class="btn btn-danger w-100 fs-3 py-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 12l5 5l10 -10" /><path d="M2 12l5 5m5 -5l5 -5" /></svg>
+              Confirmar Arqueo y Cerrar Turno
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 from django import forms
 import re
 from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto, Compra,DetalleCompra,AjusteInventario
+from .models import Caja, SesionCaja
 #Django necesita saber cómo validar los datos antes de guardarlos entonces Vamos a crear un archivo para "traducir" el modelo a HTML.
 class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario que vamos a usar en la vista
     class Meta: # Meta es un diccionario que contiene la configuración del formulario
@@ -180,10 +181,33 @@ class AjusteInventarioForm(forms.ModelForm):
         model = AjusteInventario
         fields = ['producto', 'tipo', 'cantidad', 'motivo']
         widgets = {
-            # OJO: Quitamos 'producto' de aquí adentro porque ya lo definimos arriba
+            
             'tipo': forms.Select(attrs={'class': 'form-select'}),
             'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'motivo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Producto dañado, devolución, etc.'}),
         }
 
+class AbrirSesionCajaForm(forms.ModelForm):
+    class Meta:
+        model = SesionCaja
+        fields = ['caja', 'saldo_inicial']
+        widgets = {
+            'caja': forms.Select(attrs={'class': 'form-select'}),
+            'saldo_inicial': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej. 50.00'}),
+        }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Solo mostrar cajas que estén activas
+        self.fields['caja'].queryset = Caja.objects.filter(activa=True)        
+
+class CerrarSesionCajaForm(forms.ModelForm):
+    class Meta:
+        model = SesionCaja
+        fields = ['saldo_real']
+        widgets = {
+            'saldo_real': forms.NumberInput(attrs={'class': 'form-control fs-2', 'step': '0.01', 'placeholder': 'Ej. 85.00'}),
+        }
+        labels = {
+            'saldo_real': 'Efectivo total en gaveta (Billetes y monedas)'
+        }

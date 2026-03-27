@@ -24,6 +24,8 @@ from .forms import (
     CompraForm,
     DetalleCompraForm,
     AjusteInventarioForm,
+    AbrirSesionCajaForm,
+    CerrarSesionCajaForm,
 )
 from .models import (
     Producto,
@@ -36,6 +38,8 @@ from .models import (
     Cliente,
     DetalleVenta,
     AjusteInventario,
+    Caja,
+    SesionCaja,
 )
 
 @login_required
@@ -535,70 +539,97 @@ def compra_eliminar(request: HttpRequest, id_publico) -> HttpResponse:
 
 #MODULO DE VENTAS 
 
-def crear_venta_borrador(request: HttpRequest) -> HttpResponse:
-    cliente_base = Cliente.objects.first()
-    if not cliente_base:
-        messages.error(request, "Bloqueo del sistema: Debes registrar al menos un cliente antes de poder crear una factura.")
-        return redirect('dashboard')
-    nueva_venta = Venta.objects.create(
-        cliente=cliente_base,
-        estado='borrador',
-        tipo_documento='FCF'
-    )
-    return redirect('venta_detalle', codigo_generacion=nueva_venta.codigo_generacion)
+@login_required
+def crear_venta_borrador(request):
+    # 1. El Candado de Caja (Nunca se quita)
+    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
+    if not sesion_activa:
+        messages.error(request, "¡Alto ahí! No puedes crear facturas sin abrir un turno de caja primero.")
+        return redirect('abrir_sesion') # Asegúrate que coincida con el nombre en tu urls.py
+
+    # 2. Recibir datos del Modal (Por POST)
+    if request.method == 'POST':
+        cliente_id = request.POST.get('cliente')
+        tipo_documento = request.POST.get('tipo_documento')
+
+        # Regla de negocio: No permitimos valores nulos
+        if not cliente_id or not tipo_documento:
+            messages.error(request, "Faltan datos. Debes seleccionar un cliente y el tipo de documento.")
+            return redirect('venta_list')
+
+        # 3. Buscar el cliente en la base de datos
+        cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
+
+        # 4. Crear el registro inyectando los datos reales
+        nueva_venta = Venta.objects.create(
+            cliente=cliente_seleccionado,
+            estado='borrador',
+            tipo_documento=tipo_documento,
+            sesion_caja=sesion_activa 
+        )
+        
+        return redirect('venta_detalle', codigo_generacion=nueva_venta.codigo_generacion)
+
+    # Si alguien intenta entrar escribiendo la URL directamente (GET), lo rebotamos
+    return redirect('venta_list')
 
 
 
+@login_required
 def venta_list(request):
-    # Ahora sí usamos el nombre real de tu campo de fecha en la base de datos
     ventas = Venta.objects.all().order_by('-fecha_hora_emision')
+    # Extraemos solo los clientes activos para el modal
+    clientes = Cliente.objects.filter(estado=True).order_by('nombres')
     
     context = {
-        'ventas': ventas
+        'ventas': ventas,
+        'clientes': clientes, # <-- Pieza clave
     }
     return render(request, 'core/venta_list.html', context)
-
-def venta_detalle(request, codigo_generacion):
-    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
-    productos_disponibles = Producto.objects.filter(
-        activo=True,
-        es_vendible=True,
-        stock__gt=0
-    ).order_by('nombre')
-    context = {
-        'venta': venta,
-        'productos': productos_disponibles,
-    }
-    return render(request, 'core/venta_detalle.html', context)
 
 
 @require_POST
 def venta_agregar_producto(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    
     if venta.estado != 'borrador':
         return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
+        
     producto_id = request.POST.get('producto')
     try:
         cantidad = Decimal(request.POST.get('cantidad', 0))
         descuento = Decimal(request.POST.get('descuento', 0))
     except Exception:
         return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Valores numéricos inválidos.</td></tr>")
+        
     producto = get_object_or_404(Producto, id=producto_id)
+    
     if cantidad > producto.stock:
         return HttpResponse(
             f"<tr><td colspan='7' class='text-danger text-center fw-bold bg-red-lt'>¡Alerta! Intentas vender {cantidad} pero solo quedan {producto.stock} en Kardex. Venta bloqueada.</td></tr>"
         )
 
+    # --- PARCHE TRIBUTARIO: EXTRACCION DE IVA PARA CCF ---
+    # Asumimos que producto.precio_venta ya tiene el IVA incluido (precio público)
+    precio_real = producto.precio_venta
+
+    if venta.tipo_documento == 'CCF':
+        # Le quitamos el IVA dividiendo entre 1.13 y lo redondeamos a 2 decimales
+        precio_real = (producto.precio_venta / Decimal('1.13')).quantize(Decimal('0.01'))
+    # -----------------------------------------------------
+
     DetalleVenta.objects.create(
         venta=venta,
         producto=producto,
         cantidad=cantidad,
-        precio_unitario=producto.precio_venta,
+        precio_unitario=precio_real, # <-- Aquí inyectamos el precio correcto
         descuento=descuento,
         tipo_afectacion='gravada'
     )
+    
     detalles = venta.detalles.all()
-    venta.refresh_from_db()
+    venta.refresh_from_db() # Aquí tu Signal ya hizo la suma y el cálculo de impuestos
+    
     html = ""
     for d in detalles:
         html += f"""
@@ -616,6 +647,7 @@ def venta_agregar_producto(request, codigo_generacion):
             </td>
         </tr>
         """
+        
     script_totales = f"""
     <script>
         var caja = document.getElementById('caja-totales');
@@ -631,6 +663,19 @@ def venta_agregar_producto(request, codigo_generacion):
     """
     return HttpResponse(html + script_totales)
 
+def venta_detalle(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    productos_disponibles = Producto.objects.filter(
+        activo=True,
+        es_vendible=True,
+        stock__gt=0
+    ).order_by('nombre')
+    
+    context = {
+        'venta': venta,
+        'productos': productos_disponibles,
+    }
+    return render(request, 'core/venta_detalle.html', context)
 
 @require_POST
 def venta_eliminar_producto(request: HttpRequest, detalle_id: int) -> HttpResponse:
@@ -707,12 +752,17 @@ def venta_sellar(request, codigo_generacion):
                 producto.save()
             
             # 3. Cambio de estado de la factura
-            # Nota: Asegúrate de que tu modelo Venta use 'sellada' o 'completada' en las opciones de estado.
             venta.estado = 'sellada' 
             venta.save()
             
-            messages.success(request, f'Documento sellado exitosamente. Se descontaron {detalles.count()} productos del Kardex.')
+            # --- NUEVO: SUMAR EL DINERO A LA CAJA DEL CAJERO ---
+            # Como ya obligamos a que toda venta tenga una sesion_caja, simplemente la llamamos
+            sesion = venta.sesion_caja
+            sesion.saldo_esperado += venta.total_pagar
+            sesion.save()
+            # ---------------------------------------------------
             
+            messages.success(request, f'Documento sellado. Se ingresaron ${venta.total_pagar} a tu caja y se descontaron productos del Kardex.')        
     except ValueError as e:
         # Si algo falla, la transacción se revierte sola y mostramos el error
         messages.error(request, str(e))
@@ -771,3 +821,68 @@ def crear_ajuste(request):
         form = AjusteInventarioForm()
     
     return render(request, 'core/partials/ajuste_form.html', {'form': form})
+
+
+@login_required
+def abrir_sesion_caja(request):
+    # Regla de negocio: ¿El usuario ya tiene un turno abierto?
+    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
+    
+    if sesion_activa:
+        messages.warning(request, f"Ya tienes un turno abierto en {sesion_activa.caja.nombre}. Cierra ese turno antes de abrir otro.")
+        return redirect('venta_list') 
+
+    if request.method == 'POST':
+        form = AbrirSesionCajaForm(request.POST)
+        if form.is_valid():
+            sesion = form.save(commit=False)
+            sesion.usuario = request.user
+            # El saldo esperado inicia exactamente igual al saldo inicial (no hay ventas aún)
+            sesion.saldo_esperado = sesion.saldo_inicial 
+            sesion.save()
+            
+            messages.success(request, f"Turno abierto exitosamente en {sesion.caja.nombre}.")
+            return redirect('home') # Luego lo cambiaremos para que vaya directo a vender
+    else:
+        form = AbrirSesionCajaForm()
+
+    return render(request, 'core/caja/abrir_sesion.html', {'form': form})
+
+
+@login_required
+def cerrar_sesion_caja(request):
+    # 1. Buscamos la sesión que el usuario tiene abierta actualmente
+    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
+
+    if not sesion_activa:
+        messages.warning(request, "No tienes ningún turno abierto para cerrar.")
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = CerrarSesionCajaForm(request.POST, instance=sesion_activa)
+        if form.is_valid():
+            sesion = form.save(commit=False)
+            
+            # 2. Registramos la hora de cierre y calculamos el faltante/sobrante
+            sesion.fecha_cierre = timezone.now()
+            sesion.diferencia = sesion.saldo_real - sesion.saldo_esperado
+            sesion.estado = 'cerrada'
+            sesion.save()
+
+            # 3. Retroalimentación crítica basada en la auditoría
+            if sesion.diferencia == 0:
+                messages.success(request, "Turno cerrado con éxito. Caja cuadrada perfectamente.")
+            elif sesion.diferencia > 0:
+                messages.warning(request, f"Turno cerrado. Tienes un SOBRANTE de ${sesion.diferencia}. Revisa si olvidaste dar un vuelto.")
+            else:
+                messages.error(request, f"Turno cerrado. Tienes un FALTANTE de ${abs(sesion.diferencia)}. Este monto deberá ser justificado.")
+
+            return redirect('dashboard')
+    else:
+        form = CerrarSesionCajaForm(instance=sesion_activa)
+
+    context = {
+        'form': form,
+        'sesion': sesion_activa
+    }
+    return render(request, 'core/caja/cerrar_sesion.html', context)

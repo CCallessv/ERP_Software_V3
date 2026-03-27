@@ -73,42 +73,57 @@
         </div>
       </div>
 
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">Últimas Transacciones (Ventas)</h3>
-      </div>
-      <div class="table-responsive">
-        <table class="table card-table table-vcenter text-nowrap datatable">
-          <thead>
-            <tr>
-              <th>UUID Documento</th>
-              <th>Cliente</th>
-              <th>Fecha</th>
-              <th>Total</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for venta in ultimas_ventas %}
-            <tr>
-              <td><span class="text-secondary">{{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}...</span></td>
-              <td>{{ venta.cliente.nombres }}</td>
-              <td>{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
-              <td class="font-weight-bold">${{ venta.total_pagar }}</td>
-              <td><span class="badge bg-success me-1"></span> {{ venta.get_estado_display|title }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="5" class="text-center text-secondary">Aún no hay ventas registradas este mes.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
+    </div> <div class="row row-cards">
+      
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Últimas Transacciones (Ventas)</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table card-table table-vcenter text-nowrap datatable">
+              <thead>
+                <tr>
+                  <th>UUID Documento</th>
+                  <th>Cliente</th>
+                  <th>Fecha</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for venta in ultimas_ventas %}
+                <tr>
+                  <td><span class="text-secondary">{{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}...</span></td>
+                  <td>{{ venta.cliente.nombres }}</td>
+                  <td>{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
+                  <td class="font-weight-bold">${{ venta.total_pagar }}</td>
+                  <td><span class="badge bg-success me-1"></span> {{ venta.get_estado_display|title }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center text-secondary">Aún no hay ventas registradas este mes.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div> <div class="col-lg-4">
+        <div class="card">
+          <div class="card-body">
+            <h3 class="card-title">Flujo de Capital (Mes Actual)</h3>
+            <div id="chart-flujo-capital" class="chart-lg" 
+                 data-ventas="{{ total_ventas|stringformat:'f'|default:'0' }}" 
+                 data-compras="{{ total_compras|stringformat:'f'|default:'0' }}">
+            </div>
+          </div>
+        </div>
+      </div> 
 </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="{% static 'js/DonutChart.js' %}"></script>
 {% endblock %}

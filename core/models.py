@@ -385,6 +385,9 @@ class Venta(models.Model):
     
     total_pagar = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
+    # El candado: Toda venta debe pertenecer a una sesión de caja
+    sesion_caja = models.ForeignKey('SesionCaja', on_delete=models.PROTECT, related_name='ventas')
+
     def __str__(self):
         return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"
 
@@ -487,3 +490,47 @@ class AjusteInventario(models.Model):
                 else:
                     raise ValueError("No puedes retirar más stock del que existe.")
             self.producto.save()      
+
+class Caja(models.Model):
+    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    nombre = models.CharField(max_length=50, help_text="Ej. Caja Principal, Caja Sala de Ventas")
+    activa = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.nombre
+
+class SesionCaja(models.Model):
+    ESTADO_SESION = [
+        ('abierta', 'Abierta'),
+        ('cerrada', 'Cerrada'),
+    ]
+
+    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    caja = models.ForeignKey(Caja, on_delete=models.PROTECT)
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Cajero responsable")
+    
+    fecha_apertura = models.DateTimeField(default=timezone.now)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    
+    # El dinero con el que empieza el turno (sencillo para vuelto)
+    saldo_inicial = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Lo que el sistema calcula que debería haber al sumar ventas
+    saldo_esperado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Lo que el cajero realmente cuenta en billetes y monedas al irse
+    saldo_real = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # Si falta o sobra dinero (saldo_real - saldo_esperado)
+    diferencia = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    estado = models.CharField(max_length=10, choices=ESTADO_SESION, default='abierta')
+
+    class Meta:
+        ordering = ['-fecha_apertura']
+
+    def __str__(self):
+        return f"Sesión {self.caja.nombre} - {self.usuario.username} ({self.fecha_apertura.strftime('%d/%m/%Y')})"
+
+
+            

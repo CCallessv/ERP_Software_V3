@@ -12,10 +12,10 @@
             </div>
             <div class="col-auto ms-auto d-print-none">
                 <div class="btn-list">
-                    <a href="{% url 'crear_venta_borrador' %}" class="btn btn-primary d-none d-sm-inline-block">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-nueva-venta">
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
                         Nueva Venta
-                    </a>
+                      </button>
                 </div>
             </div>
         </div>
@@ -70,4 +70,49 @@
         </div>
     </div>
 </div>
+
+<div class="modal modal-blur fade" id="modal-nueva-venta" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Generar Nuevo Documento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <form action="{% url 'crear_venta_borrador' %}" method="POST">
+          {% csrf_token %}
+          <div class="modal-body">
+            
+            <div class="mb-3">
+              <label class="form-label required">Selecciona el Cliente</label>
+              <select name="cliente" class="form-select" required>
+                <option value="" disabled selected>-- Elige un cliente --</option>
+                {% for cliente in clientes %}
+                  <option value="{{ cliente.id }}">{{ cliente.nombres }} {{ cliente.apellidos }}</option>
+                {% empty %}
+                  <option value="" disabled>No hay clientes registrados.</option>
+                {% endfor %}
+              </select>
+            </div>
+  
+            <div class="mb-3">
+              <label class="form-label required">Tipo de Comprobante</label>
+              <select name="tipo_documento" class="form-select" required>
+                <option value="" disabled selected>-- Elige el documento --</option>
+                <option value="FCF">Factura de Consumidor Final (FCF)</option>
+                <option value="CCF">Comprobante de Crédito Fiscal (CCF)</option>
+              </select>
+              <small class="form-hint">Asegúrate de que el cliente tenga su NIT/NRC registrado si eliges CCF.</small>
+            </div>
+  
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn me-auto" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear Documento</button>
+          </div>
+        </form>
+        
+      </div>
+    </div>
+  </div>
 {% endblock %}
