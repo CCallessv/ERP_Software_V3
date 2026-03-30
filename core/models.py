@@ -532,5 +532,39 @@ class SesionCaja(models.Model):
     def __str__(self):
         return f"Sesión {self.caja.nombre} - {self.usuario.username} ({self.fecha_apertura.strftime('%d/%m/%Y')})"
 
+class MovimientoCaja(models.Model):
+    TIPO_MOVIMIENTO = (
+        ('ingreso', 'Ingreso de Dinero (Sencillo, etc.)'),
+        ('egreso', 'Egreso de Dinero (Gasto, Retiro, etc.)'),
+    )
+    
+    # Relación fuerte: Todo movimiento pertenece a un turno de caja específico
+    sesion_caja = models.ForeignKey(SesionCaja, on_delete=models.CASCADE, related_name='movimientos')
+    
+    # Auditoría
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Usuario que registró el movimiento")
+    tipo = models.CharField(max_length=10, choices=TIPO_MOVIMIENTO)
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    descripcion = models.CharField(max_length=255, help_text="Justificación exacta del movimiento")
+    fecha_hora = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return f"{self.get_tipo_display()} - ${self.monto} ({self.sesion_caja.caja.nombre})"
+
+    def save(self, *args, **kwargs):
+        # Detectamos si es un registro nuevo (para no sumar/restar doble si alguien solo edita el texto)
+        es_nuevo = self.pk is None 
+        super().save(*args, **kwargs)
+        
+        # El interceptor matemático: actualiza el saldo de la caja en tiempo real
+        if es_nuevo:
+            if self.tipo == 'ingreso':
+                self.sesion_caja.saldo_esperado += self.monto
+            elif self.tipo == 'egreso':
+                self.sesion_caja.saldo_esperado -= self.monto
+            self.sesion_caja.save()
+
+    class Meta:
+        verbose_name = 'Movimiento de Caja'
+        verbose_name_plural = 'Movimientos de Caja'
             

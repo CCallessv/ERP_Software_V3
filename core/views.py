@@ -14,6 +14,7 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 from django.utils import timezone
 from .models import Producto, Venta
+from .decorators import rol_requerido
 
 from .forms import (
     ProductoForm,
@@ -40,6 +41,7 @@ from .models import (
     AjusteInventario,
     Caja,
     SesionCaja,
+    MovimientoCaja,
 )
 
 @login_required
@@ -581,9 +583,13 @@ def venta_list(request):
     # Extraemos solo los clientes activos para el modal
     clientes = Cliente.objects.filter(estado=True).order_by('nombres')
     
+    # Buscamos si el usuario actual tiene un turno de caja abierto
+    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
+    
     context = {
         'ventas': ventas,
-        'clientes': clientes, # <-- Pieza clave
+        'clientes': clientes, 
+        'sesion_activa': sesion_activa, 
     }
     return render(request, 'core/venta_list.html', context)
 
@@ -886,3 +892,91 @@ def cerrar_sesion_caja(request):
         'sesion': sesion_activa
     }
     return render(request, 'core/caja/cerrar_sesion.html', context)
+#Funcion que anula una venta (IMPORTANTE)
+@login_required
+@rol_requerido('Administrador') # Solo tu puedes ejecutar esto
+def anular_venta(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+
+    # Logica de negocio: No puedes anular un borrador o algo ya anulado
+    if venta.estado != 'completada' and venta.estado != 'sellada': 
+        messages.error(request, "Solo puedes anular facturas que ya fueron procesadas.")
+        return redirect('venta_list')
+
+    if request.method == 'POST':
+        try:
+            with transaction.atomic(): # Inicia la transacción blindada
+                
+                # 1. Reversion de Inventario (Devolver al Kardex)
+                for detalle in venta.detalles.all():
+                    producto = detalle.producto
+                    producto.stock += detalle.cantidad
+                    producto.save()
+
+                # 2. Reversion de Caja
+                sesion = venta.sesion_caja
+                if sesion.estado == 'abierta':
+                    sesion.saldo_esperado -= venta.total_pagar
+                    sesion.save()
+                else:
+                    # Caso limite: Intentan anular una venta de ayer con la caja ya cerrada.
+                    raise Exception("No puedes anular una factura ligada a un turno de caja que ya fue cerrado. La contabilidad no cuadraría.")
+
+                # 3. Ajuste Fiscal
+                venta.estado = 'anulada'
+                venta.sumatoria_gravadas = 0
+                venta.sumatoria_exentas = 0
+                venta.sumatoria_no_sujetas = 0
+                venta.iva = 0
+                venta.total_pagar = 0
+                venta.save()
+
+            messages.success(request, f"Factura anulada con éxito. Inventario devuelto y caja ajustada.")
+        
+        except Exception as e:
+            # Si algo explota (como la excepcion de la caja cerrada), cancela todo y muestra el error
+            messages.error(request, f"Operación denegada: {str(e)}")
+
+    # Te regresa a la lista de ventas sin importar lo que pase
+    return redirect('venta_list')
+
+@login_required
+@require_POST
+def registrar_movimiento_caja(request, sesion_id):
+    sesion = get_object_or_404(SesionCaja, id=sesion_id)
+    
+    # Candado 1: La caja debe estar abierta
+    if sesion.estado != 'abierta':
+        messages.error(request, "Error: No puedes registrar movimientos en un turno cerrado.")
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+        
+    tipo = request.POST.get('tipo')
+    descripcion = request.POST.get('descripcion')
+    
+    try:
+        monto = Decimal(request.POST.get('monto', '0'))
+        if monto <= 0:
+            raise ValueError
+    except:
+        messages.error(request, "Error: El monto ingresado no es válido.")
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+    # Candado 2: Evitar saldos negativos (No puedes sacar lo que no tienes)
+    if tipo == 'egreso' and monto > sesion.saldo_esperado:
+        messages.error(request, f"Fondos insuficientes. Intenas sacar ${monto} pero la caja solo tiene ${sesion.saldo_esperado}.")
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+    # Si pasa los candados, creamos el registro
+    # (Tu modelo ya se encarga de sumar o restar matemáticamente en el método save)
+    MovimientoCaja.objects.create(
+        sesion_caja=sesion,
+        usuario=request.user,
+        tipo=tipo,
+        monto=monto,
+        descripcion=descripcion
+    )
+    
+    messages.success(request, f"{tipo.capitalize()} de ${monto} registrado correctamente.")
+    
+    # El referer te devuelve a la página exacta donde estabas
+    return redirect(request.META.get('HTTP_REFERER', 'home'))
