@@ -980,3 +980,36 @@ def registrar_movimiento_caja(request, sesion_id):
     
     # El referer te devuelve a la página exacta donde estabas
     return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+
+@login_required
+@require_POST
+def cerrar_sesion_caja(request, sesion_id):
+    # Candado: Solo el dueño de la caja puede cerrarla y debe estar abierta
+    sesion = get_object_or_404(SesionCaja, id=sesion_id, usuario=request.user, estado='abierta')
+    
+    try:
+        saldo_fisico = Decimal(request.POST.get('saldo_fisico', '0'))
+        if saldo_fisico < 0:
+            raise ValueError
+    except:
+        messages.error(request, "Error: Ingresa un monto físico válido.")
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+    # Matemática del Cierre Ciego
+    # Diferencia = Lo que hay físicamente - Lo que el sistema esperaba
+    # Si da negativo, es un Faltante (le falta plata). Si da positivo, es un Sobrante.
+    diferencia = saldo_fisico - sesion.saldo_esperado
+    
+    # Sellamos la caja
+    sesion.saldo_fisico = saldo_fisico
+    sesion.diferencia = diferencia
+    sesion.fecha_hora_cierre = timezone.now()
+    sesion.estado = 'cerrada'
+    sesion.save()
+
+    # Le damos retroalimentación genérica al cajero, NO le decimos de cuánto fue su descuadre
+    messages.success(request, f"Turno cerrado exitosamente. El reporte ha sido guardado para auditoría.")
+    
+    # Lo sacamos de la pantalla de ventas porque ya no tiene caja abierta
+    return redirect('home')

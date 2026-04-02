@@ -204,10 +204,10 @@ class AbrirSesionCajaForm(forms.ModelForm):
 class CerrarSesionCajaForm(forms.ModelForm):
     class Meta:
         model = SesionCaja
-        fields = ['saldo_real']
+        fields = ['saldo_fisico']
         widgets = {
-            'saldo_real': forms.NumberInput(attrs={'class': 'form-control fs-2', 'step': '0.01', 'placeholder': 'Ej. 85.00'}),
+            'saldo_fisico': forms.NumberInput(attrs={'class': 'form-control fs-2', 'step': '0.01', 'placeholder': 'Ej. 85.00'}),
         }
         labels = {
-            'saldo_real': 'Efectivo total en gaveta (Billetes y monedas)'
+            'saldo_fisico': 'Efectivo total en gaveta (Billetes y monedas)'
         }

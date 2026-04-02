@@ -103,7 +103,7 @@
                             {% if venta.estado == 'borrador' %}<th>Acción</th>{% endif %}
                         </tr>
                     </thead>
-                    <tbody id="tabla-productos">
+                    <tbody id="tabla-detalles-venta">
                         {% for d in venta.detalles.all %}
                           <tr>
                               <td>{{ d.producto.nombre }}</td>

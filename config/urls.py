@@ -84,6 +84,7 @@ urlpatterns = [
     path('caja/cerrar/', cerrar_sesion_caja, name='cerrar_sesion'),
     path('ventas/anular/<uuid:codigo_generacion>/', anular_venta, name='anular_venta'),
     path('caja/<int:sesion_id>/movimiento/', registrar_movimiento_caja, name='registrar_movimiento_caja'),
+    path('caja/<int:sesion_id>/cerrar/', cerrar_sesion_caja, name='cerrar_sesion_caja'),
    
 ]
 

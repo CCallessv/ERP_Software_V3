@@ -510,21 +510,21 @@ class SesionCaja(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Cajero responsable")
     
     fecha_apertura = models.DateTimeField(default=timezone.now)
-    fecha_cierre = models.DateTimeField(null=True, blank=True)
-    
     # El dinero con el que empieza el turno (sencillo para vuelto)
     saldo_inicial = models.DecimalField(max_digits=10, decimal_places=2)
     
     # Lo que el sistema calcula que debería haber al sumar ventas
     saldo_esperado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # Lo que el cajero realmente cuenta en billetes y monedas al irse
-    saldo_real = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
     # Si falta o sobra dinero (saldo_real - saldo_esperado)
     diferencia = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     estado = models.CharField(max_length=10, choices=ESTADO_SESION, default='abierta')
+
+    # Campos para el Cierre Z
+    fecha_hora_cierre = models.DateTimeField(null=True, blank=True)
+    saldo_fisico = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Lo que el cajero contó físicamente")
+    diferencia = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Sobrante (positivo) o Faltante (negativo)")
 
     class Meta:
         ordering = ['-fecha_apertura']
