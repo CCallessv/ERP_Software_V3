@@ -332,13 +332,18 @@ class DetalleCompra(models.Model):
 class Venta(models.Model):
     ESTADOS = (
         ('borrador', 'Borrador'),
-        ('completada', 'Completada'),
+        ('sellada', 'Sellada'), # Corregido: antes decía 'completada', pero en views usamos 'sellada'
         ('anulada', 'Anulada'),
     )
     
     TIPO_DOC = (
         ('FCF', 'Factura de Consumidor Final'),
         ('CCF', 'Comprobante de Crédito Fiscal'),
+    )
+
+    ESTADOS_PAGO = (
+        ('pendiente', 'Pendiente de Pago'),
+        ('pagado', 'Pagado'),
     )
     
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT)
@@ -365,11 +370,14 @@ class Venta(models.Model):
     metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO, default='efectivo')
     dias_credito = models.PositiveIntegerField(default=0, help_text="Aplica solo si la condición es Crédito")
     
+    # Nuevo campo para controlar la deuda (CxC) en lugar de la caja
+    estado_pago = models.CharField(max_length=15, choices=ESTADOS_PAGO, default='pendiente')
+    
     # METADATOS Y OBSERVACIONES
     numero_factura = models.CharField(max_length=20, unique=True, blank=True, null=True)
-    fecha_hora_emision = models.DateTimeField(auto_now_add=True) # Modificado para capturar hora exacta
+    fecha_hora_emision = models.DateTimeField(auto_now_add=True) 
     estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
-    observaciones = models.TextField(blank=True, null=True) # Agregado para cumplir con el esquema
+    observaciones = models.TextField(blank=True, null=True) 
     
     # TOTALES GRANULARES
     sumatoria_gravadas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -385,8 +393,7 @@ class Venta(models.Model):
     
     total_pagar = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
-    # El candado: Toda venta debe pertenecer a una sesión de caja
-    sesion_caja = models.ForeignKey('SesionCaja', on_delete=models.PROTECT, related_name='ventas')
+    # Nota: Ya no hay ForeignKey a SesionCaja. 
 
     def __str__(self):
         return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"
@@ -491,80 +498,5 @@ class AjusteInventario(models.Model):
                     raise ValueError("No puedes retirar más stock del que existe.")
             self.producto.save()      
 
-class Caja(models.Model):
-    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    nombre = models.CharField(max_length=50, help_text="Ej. Caja Principal, Caja Sala de Ventas")
-    activa = models.BooleanField(default=True)
 
-    def __str__(self):
-        return self.nombre
 
-class SesionCaja(models.Model):
-    ESTADO_SESION = [
-        ('abierta', 'Abierta'),
-        ('cerrada', 'Cerrada'),
-    ]
-
-    id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    caja = models.ForeignKey(Caja, on_delete=models.PROTECT)
-    usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Cajero responsable")
-    
-    fecha_apertura = models.DateTimeField(default=timezone.now)
-    # El dinero con el que empieza el turno (sencillo para vuelto)
-    saldo_inicial = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    # Lo que el sistema calcula que debería haber al sumar ventas
-    saldo_esperado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    
-    # Si falta o sobra dinero (saldo_real - saldo_esperado)
-    diferencia = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
-    estado = models.CharField(max_length=10, choices=ESTADO_SESION, default='abierta')
-
-    # Campos para el Cierre Z
-    fecha_hora_cierre = models.DateTimeField(null=True, blank=True)
-    saldo_fisico = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Lo que el cajero contó físicamente")
-    diferencia = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Sobrante (positivo) o Faltante (negativo)")
-
-    class Meta:
-        ordering = ['-fecha_apertura']
-
-    def __str__(self):
-        return f"Sesión {self.caja.nombre} - {self.usuario.username} ({self.fecha_apertura.strftime('%d/%m/%Y')})"
-
-class MovimientoCaja(models.Model):
-    TIPO_MOVIMIENTO = (
-        ('ingreso', 'Ingreso de Dinero (Sencillo, etc.)'),
-        ('egreso', 'Egreso de Dinero (Gasto, Retiro, etc.)'),
-    )
-    
-    # Relación fuerte: Todo movimiento pertenece a un turno de caja específico
-    sesion_caja = models.ForeignKey(SesionCaja, on_delete=models.CASCADE, related_name='movimientos')
-    
-    # Auditoría
-    usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Usuario que registró el movimiento")
-    tipo = models.CharField(max_length=10, choices=TIPO_MOVIMIENTO)
-    monto = models.DecimalField(max_digits=10, decimal_places=2)
-    descripcion = models.CharField(max_length=255, help_text="Justificación exacta del movimiento")
-    fecha_hora = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.get_tipo_display()} - ${self.monto} ({self.sesion_caja.caja.nombre})"
-
-    def save(self, *args, **kwargs):
-        # Detectamos si es un registro nuevo (para no sumar/restar doble si alguien solo edita el texto)
-        es_nuevo = self.pk is None 
-        super().save(*args, **kwargs)
-        
-        # El interceptor matemático: actualiza el saldo de la caja en tiempo real
-        if es_nuevo:
-            if self.tipo == 'ingreso':
-                self.sesion_caja.saldo_esperado += self.monto
-            elif self.tipo == 'egreso':
-                self.sesion_caja.saldo_esperado -= self.monto
-            self.sesion_caja.save()
-
-    class Meta:
-        verbose_name = 'Movimiento de Caja'
-        verbose_name_plural = 'Movimientos de Caja'
-            

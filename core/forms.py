@@ -1,15 +1,17 @@
 from django import forms
 import re
-from .models import Cliente, Producto, Proveedor, Categoria, PresentacionProducto, Compra,DetalleCompra,AjusteInventario
-from .models import Caja, SesionCaja
-#Django necesita saber cómo validar los datos antes de guardarlos entonces Vamos a crear un archivo para "traducir" el modelo a HTML.
-class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario que vamos a usar en la vista
-    class Meta: # Meta es un diccionario que contiene la configuración del formulario
-        model = Cliente #modelo cliente
+from .models import (
+    Cliente, Producto, Proveedor, Categoria, 
+    PresentacionProducto, Compra, DetalleCompra, AjusteInventario
+)
+
+# === FORMULARIO DE CLIENTES (B2B) ===
+class ClienteForm(forms.ModelForm):
+    class Meta:
+        model = Cliente
         fields = ['nombres', 'documento', 'nrc', 'giro', 'email', 'telefono', 'direccion', 'limite_credito', 'plazo_credito', 'estado']
         
-        # Esto hace que los inputs se vean bonitos con Tabler (Bootstrap)
-        widgets = { # widgets es un diccionario que contiene los widgets que vamos a usar en el formulario
+        widgets = {
             'nombres': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Juan Pérez S.A. de C.V.'}),
             'documento': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'DUI o NIT'}),
             'nrc': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Registro'}),
@@ -22,6 +24,7 @@ class ClienteForm(forms.ModelForm): # ClienteForm es el nombre del formulario qu
             'estado': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
+# === FORMULARIO DE PRODUCTOS ===
 class ProductoForm(forms.ModelForm):
     class Meta:
         model = Producto
@@ -34,20 +37,18 @@ class ProductoForm(forms.ModelForm):
         
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        # Inyectar clases de Bootstrap a todos los campos
         for field_name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs['class'] = 'form-check-input'
             else:
                 field.widget.attrs['class'] = 'form-control'
                 
-        # BLOQUEO EMPRESARIAL: El stock inicial no se puede manipular
+        # BLOQUEO: El stock inicial no se puede manipular manualmente
         self.fields['stock'].widget.attrs['readonly'] = True
         self.fields['stock'].initial = 0.00
-        self.fields['stock'].help_text = "Bloqueado. El stock se gestiona vía compras o ajustes."  
+        self.fields['stock'].help_text = "El stock se gestiona vía compras o ajustes."  
 
-
+# === FORMULARIO DE PROVEEDORES ===
 class ProveedorForm(forms.ModelForm):
     class Meta:
         model = Proveedor
@@ -58,9 +59,8 @@ class ProveedorForm(forms.ModelForm):
             'direccion', 'limite_credito', 'dias_credito'
         ]
         widgets = {
-            # Aplicamos clases de Tabler para que se vea profesional
-            'nombre_comercial': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Carnicería La Bendición'}),
-            'razon_social': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Juan Pérez S.A. de C.V.'}),
+            'nombre_comercial': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Proveedor Carnes'}),
+            'razon_social': forms.TextInput(attrs={'class': 'form-control'}),
             'nit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '0000-000000-000-0'}),
             'nrc': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '000000-0'}),
             'tipo_persona': forms.Select(attrs={'class': 'form-select'}),
@@ -74,42 +74,31 @@ class ProveedorForm(forms.ModelForm):
             'dias_credito': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
-    # --- Validaciones de Seguridad (Blindaje de Datos) ---
-
     def clean_nit(self):
         nit = self.cleaned_data.get('nit')
-        # Formato: 0614-200190-101-5 (4-6-3-1 dígitos)
         regex_nit = r'^\d{4}-\d{6}-\d{3}-\d{1}$'
         if nit and not re.match(regex_nit, nit):
-            raise forms.ValidationError("El NIT debe seguir el formato legal: 0000-000000-000-0")
+            raise forms.ValidationError("El NIT debe seguir el formato legal de El Salvador.")
         return nit
 
     def clean_nrc(self):
         nrc = self.cleaned_data.get('nrc')
-        # El NRC suele ser de 6 a 8 dígitos seguidos de un guion y un dígito
         if nrc and '-' not in nrc:
-             raise forms.ValidationError("El NRC (Registro de IVA) debe incluir el guion verificador.")
+             raise forms.ValidationError("El NRC debe incluir el guion verificador.")
         return nrc    
 
+# === FORMULARIO DE CATEGORÍAS ===
 class CategoriaForm(forms.ModelForm):
     class Meta:
         model = Categoria
         fields = ['nombre', 'descripcion', 'estado']
         widgets = {
-            'nombre': forms.TextInput(attrs={
-                'class': 'form-control', 
-                'placeholder': 'Ej. Lácteos, Electrónica...'
-            }),
-            'descripcion': forms.Textarea(attrs={
-                'class': 'form-control', 
-                'rows': 3, 
-                'placeholder': 'Breve descripción de la categoría (Opcional)'
-            }),
-            'estado': forms.CheckboxInput(attrs={
-                'class': 'form-check-input'
-            }),
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'estado': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
+# === FORMULARIO DE PRESENTACIONES ===
 class PresentacionForm(forms.ModelForm):
     class Meta:
         model = PresentacionProducto
@@ -117,20 +106,13 @@ class PresentacionForm(forms.ModelForm):
         
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
         for field_name, field in self.fields.items():
             field.widget.attrs['class'] = 'form-control'
-            
-        # Forzar que el factor de conversión no pueda ser menor a 0.0001
-        self.fields['factor_conversion'].widget.attrs.update({
-            'min': '0.0001', 
-            'step': '0.0001'
-        })
-        self.fields['precio_venta'].widget.attrs.update({
-            'min': '0.00', 
-            'step': '0.01'
-        })
+        
+        self.fields['factor_conversion'].widget.attrs.update({'min': '0.0001', 'step': '0.0001'})
+        self.fields['precio_venta'].widget.attrs.update({'min': '0.00', 'step': '0.01'})
 
+# === FORMULARIO DE COMPRAS ===
 class CompraForm(forms.ModelForm):
     class Meta:
         model = Compra
@@ -139,16 +121,14 @@ class CompraForm(forms.ModelForm):
             'fecha_compra': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'proveedor': forms.Select(attrs={'class': 'form-select'}),
             'tipo_comprobante': forms.Select(attrs={'class': 'form-select'}),
-            'numero_comprobante': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. 0001-00000456'}),
+            'numero_comprobante': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtramos para que solo salgan proveedores activos
-        from .models import Proveedor
         self.fields['proveedor'].queryset = Proveedor.objects.filter(activo=True)        
 
-
+# === FORMULARIO DE DETALLE DE COMPRA ===
 class DetalleCompraForm(forms.ModelForm):
     class Meta:
         model = DetalleCompra
@@ -161,17 +141,14 @@ class DetalleCompraForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Solo mostrar productos que estén activos en el inventario
         self.fields['producto'].queryset = Producto.objects.filter(activo=True)        
 
-
+# === FORMULARIO DE AJUSTES DE INVENTARIO ===
 class ProductoConStockChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        # Aquí definimos exactamente cómo se lee cada opción en el dropdown
-        return f"{obj.nombre} ({obj.codigo}) — Stock actual: {obj.stock}"
+        return f"{obj.nombre} — Stock actual: {obj.stock}"
 
 class AjusteInventarioForm(forms.ModelForm):
-    # Forzamos al formulario a usar nuestro campo personalizado
     producto = ProductoConStockChoiceField(
         queryset=Producto.objects.filter(activo=True), 
         widget=forms.Select(attrs={'class': 'form-select'})
@@ -181,33 +158,21 @@ class AjusteInventarioForm(forms.ModelForm):
         model = AjusteInventario
         fields = ['producto', 'tipo', 'cantidad', 'motivo']
         widgets = {
-            
             'tipo': forms.Select(attrs={'class': 'form-select'}),
             'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'motivo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Producto dañado, devolución, etc.'}),
+            'motivo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Justificación del ajuste'}),
         }
 
-class AbrirSesionCajaForm(forms.ModelForm):
-    class Meta:
-        model = SesionCaja
-        fields = ['caja', 'saldo_inicial']
-        widgets = {
-            'caja': forms.Select(attrs={'class': 'form-select'}),
-            'saldo_inicial': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'Ej. 50.00'}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Solo mostrar cajas que estén activas
-        self.fields['caja'].queryset = Caja.objects.filter(activa=True)        
-
-class CerrarSesionCajaForm(forms.ModelForm):
-    class Meta:
-        model = SesionCaja
-        fields = ['saldo_fisico']
-        widgets = {
-            'saldo_fisico': forms.NumberInput(attrs={'class': 'form-control fs-2', 'step': '0.01', 'placeholder': 'Ej. 85.00'}),
-        }
-        labels = {
-            'saldo_fisico': 'Efectivo total en gaveta (Billetes y monedas)'
-        }
+class RegistrarPagoForm(forms.Form):
+    METODO_PAGO_CHOICES = [
+        ('transferencia', 'Transferencia Bancaria'),
+        ('tarjeta', 'Tarjeta de Crédito/Débito'),
+        ('cheque', 'Cheque'),
+        ('efectivo', 'Efectivo (Administrativo)'),
+    ]
+    metodo_pago = forms.ChoiceField(choices=METODO_PAGO_CHOICES, widget=forms.Select(attrs={'class': 'form-select'}))
+    comprobante_pago = forms.CharField(
+        max_length=50, 
+        required=False, 
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Num. Transferencia o Cheque'})
+    )

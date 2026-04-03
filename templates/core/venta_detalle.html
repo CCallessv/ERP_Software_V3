@@ -53,15 +53,13 @@
 
         <div class="card">
             
-            {% if venta.estado == 'borrador' %}
-            <div class="card-body border-bottom">
-                <form hx-post="{% url 'venta_agregar_producto' venta.codigo_generacion %}" 
-                hx-target="#tabla-detalles-venta" 
-                hx-swap="innerHTML" 
-                hx-on::after-request="this.reset()" 
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                class="row g-2 align-items-end"
-                id="form-agregar-producto">
+            <form hx-post="{% url 'venta_agregar_producto' venta.codigo_generacion %}" 
+      hx-target="#tabla-detalles-venta" 
+      hx-swap="outerHTML" 
+      hx-on::after-request="this.reset()" 
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      class="row g-2 align-items-end"
+      id="form-agregar-producto">
     
     <div class="col-md-4">
         <label class="form-label text-danger">Producto *</label>
@@ -87,75 +85,26 @@
         </button>
     </div>
 </form>
+</div>
+            
+{% if venta.estado == 'borrador' %}
+            <div class="card-body border-bottom">
+                <form hx-post="{% url 'venta_agregar_producto' venta.codigo_generacion %}" 
+                      hx-target="#contenedor-facturacion" 
+                      hx-swap="outerHTML" 
+                      hx-on::after-request="this.reset()" 
+                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                      class="row g-2 align-items-end"
+                      id="form-agregar-producto">
+                      
+                      </form>
             </div>
             {% endif %}
 
-            <div class="table-responsive">
-                <table class="table table-vcenter card-table">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Cant.</th>
-                            <th>P. Unitario</th>
-                            <th>Descuento</th>
-                            <th>Afectación</th>
-                            <th>Subtotal</th>
-                            {% if venta.estado == 'borrador' %}<th>Acción</th>{% endif %}
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-detalles-venta">
-                        {% for d in venta.detalles.all %}
-                          <tr>
-                              <td>{{ d.producto.nombre }}</td>
-                              <td>{{ d.cantidad }}</td>
-                              <td>${{ d.precio_unitario }}</td>
-                              <td>${{ d.descuento }}</td>
-                              <td>{{ d.get_tipo_afectacion_display }}</td>
-                              <td class="fw-bold">${{ d.subtotal }}</td>
-                              <td>
-                                  {% if venta.estado == 'borrador' %}
-                                  <button hx-post="{% url 'venta_eliminar_producto' d.id %}" 
-                                          hx-include="[name='csrfmiddlewaretoken']"
-                                          class="btn btn-sm btn-danger btn-icon">X</button>
-                                  {% endif %}
-                              </td>
-                          </tr>
-                        {% empty %}
-                          <tr>
-                              <td colspan="7" class="text-center text-muted py-5">Factura en blanco. Selecciona un producto.</td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                </table>
-            </div>
+            {% include 'core/partials/venta_tabla_y_totales.html' %}
             
-            <div class="card-footer bg-transparent border-top-0">
-                <div class="row align-items-center">
-                    <div class="col-6">
-                        {% if venta.estado == 'borrador' %}
-                        <form action="{% url 'venta_sellar' venta.codigo_generacion %}" method="POST" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-success mt-3" onclick="return confirm('¿Estás seguro de sellar este documento? Esta acción es irreversible y descontará el inventario.');">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10" /></svg>
-                                Sellar Documento y Descontar Kardex
-                            </button>
-                        </form>
-                        {% elif venta.estado == 'sellada' %}
-                            <a href="{% url 'venta_pdf' venta.codigo_generacion %}" target="_blank" class="btn btn-primary mt-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2" /><path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4" /><path d="M7 13m0 2a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2z" /></svg>
-                                Imprimir Comprobante (PDF)
-                            </a>
-                        {% endif %}
-                    </div>
-                    <div id="caja-totales" class="col-6 text-end">
-                        <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${{ venta.sumatoria_gravadas }}</span></div>
-                        <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas }}</span></div>
-                        <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${{ venta.iva }}</span></div>
-                        <h2 class="mb-0 text-success">Total: ${{ venta.total_pagar }}</h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+        </div> 
+    </div> 
+</div> 
 {% endblock %}
+            

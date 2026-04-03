@@ -25,8 +25,7 @@ from .forms import (
     CompraForm,
     DetalleCompraForm,
     AjusteInventarioForm,
-    AbrirSesionCajaForm,
-    CerrarSesionCajaForm,
+    
 )
 from .models import (
     Producto,
@@ -39,9 +38,6 @@ from .models import (
     Cliente,
     DetalleVenta,
     AjusteInventario,
-    Caja,
-    SesionCaja,
-    MovimientoCaja,
 )
 
 @login_required
@@ -543,53 +539,40 @@ def compra_eliminar(request: HttpRequest, id_publico) -> HttpResponse:
 
 @login_required
 def crear_venta_borrador(request):
-    # 1. El Candado de Caja (Nunca se quita)
-    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
-    if not sesion_activa:
-        messages.error(request, "¡Alto ahí! No puedes crear facturas sin abrir un turno de caja primero.")
-        return redirect('abrir_sesion') # Asegúrate que coincida con el nombre en tu urls.py
-
-    # 2. Recibir datos del Modal (Por POST)
+    # 1. Recibir datos del Modal (Por POST)
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
 
-        # Regla de negocio: No permitimos valores nulos
         if not cliente_id or not tipo_documento:
             messages.error(request, "Faltan datos. Debes seleccionar un cliente y el tipo de documento.")
             return redirect('venta_list')
 
-        # 3. Buscar el cliente en la base de datos
         cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # 4. Crear el registro inyectando los datos reales
+        # 2. Crear el registro SIN caja
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
-            tipo_documento=tipo_documento,
-            sesion_caja=sesion_activa 
+            tipo_documento=tipo_documento
+            # ¡Adiós sesion_caja!
         )
         
         return redirect('venta_detalle', codigo_generacion=nueva_venta.codigo_generacion)
 
-    # Si alguien intenta entrar escribiendo la URL directamente (GET), lo rebotamos
     return redirect('venta_list')
-
-
 
 @login_required
 def venta_list(request):
     ventas = Venta.objects.all().order_by('-fecha_hora_emision')
-    # Extraemos solo los clientes activos para el modal
     clientes = Cliente.objects.filter(estado=True).order_by('nombres')
     
-    # Buscamos si el usuario actual tiene un turno de caja abierto
-    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
+    # Adiós búsqueda de caja activa
     
     context = {
         'ventas': ventas,
         'clientes': clientes, 
-        'sesion_activa': sesion_activa, 
+        # Adiós sesion_activa
     }
     return render(request, 'core/venta_list.html', context)
 
@@ -599,75 +582,54 @@ def venta_agregar_producto(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     
     if venta.estado != 'borrador':
-        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
+        return HttpResponse("Error: Factura sellada.")
         
     producto_id = request.POST.get('producto')
     try:
         cantidad = Decimal(request.POST.get('cantidad', 0))
         descuento = Decimal(request.POST.get('descuento', 0))
     except Exception:
-        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Valores numéricos inválidos.</td></tr>")
+        return HttpResponse("Error: Valores numéricos inválidos.")
         
     producto = get_object_or_404(Producto, id=producto_id)
     
     if cantidad > producto.stock:
-        return HttpResponse(
-            f"<tr><td colspan='7' class='text-danger text-center fw-bold bg-red-lt'>¡Alerta! Intentas vender {cantidad} pero solo quedan {producto.stock} en Kardex. Venta bloqueada.</td></tr>"
-        )
+        return HttpResponse(f"¡Alerta! Intentas vender {cantidad} pero solo quedan {producto.stock}.")
 
-    # --- PARCHE TRIBUTARIO: EXTRACCION DE IVA PARA CCF ---
-    # Asumimos que producto.precio_venta ya tiene el IVA incluido (precio público)
+    # Lógica de precio e IVA
     precio_real = producto.precio_venta
-
     if venta.tipo_documento == 'CCF':
-        # Le quitamos el IVA dividiendo entre 1.13 y lo redondeamos a 2 decimales
         precio_real = (producto.precio_venta / Decimal('1.13')).quantize(Decimal('0.01'))
-    # -----------------------------------------------------
 
+    # Guardado
     DetalleVenta.objects.create(
         venta=venta,
         producto=producto,
         cantidad=cantidad,
-        precio_unitario=precio_real, # <-- Aquí inyectamos el precio correcto
+        precio_unitario=precio_real,
         descuento=descuento,
         tipo_afectacion='gravada'
     )
     
-    detalles = venta.detalles.all()
-    venta.refresh_from_db() # Aquí tu Signal ya hizo la suma y el cálculo de impuestos
+    venta.refresh_from_db()
     
-    html = ""
-    for d in detalles:
-        html += f"""
-        <tr>
-            <td>{d.producto.nombre}</td>
-            <td>{d.cantidad}</td>
-            <td>${d.precio_unitario}</td>
-            <td>${d.descuento}</td>
-            <td>{d.get_tipo_afectacion_display()}</td>
-            <td class="fw-bold">${d.subtotal}</td>
-            <td>
-               <button hx-post="/ventas/detalle/{d.id}/eliminar/" 
-        hx-include="[name='csrfmiddlewaretoken']"
-        class="btn btn-sm btn-danger btn-icon">X</button>
-            </td>
-        </tr>
-        """
+    # ESTA ES LA ÚNICA RESPUESTA. Cero strings de HTML manuales.
+    return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
+
+
+@require_POST
+def venta_eliminar_producto(request, detalle_id: int):
+    detalle = get_object_or_404(DetalleVenta, id=detalle_id)
+    venta = detalle.venta
+    
+    if venta.estado != 'borrador':
+        return HttpResponse("Error: Factura sellada.")
         
-    script_totales = f"""
-    <script>
-        var caja = document.getElementById('caja-totales');
-        if (caja) {{
-            caja.innerHTML = `
-                <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${venta.sumatoria_gravadas}</span></div>
-                <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${venta.sumatoria_exentas}</span></div>
-                <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${venta.iva}</span></div>
-                <h2 class="mb-0 text-success">Total: ${venta.total_pagar}</h2>
-            `;
-        }}
-    </script>
-    """
-    return HttpResponse(html + script_totales)
+    detalle.delete()
+    venta.refresh_from_db() 
+    
+    
+    return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
 
 def venta_detalle(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
@@ -684,97 +646,38 @@ def venta_detalle(request, codigo_generacion):
     return render(request, 'core/venta_detalle.html', context)
 
 @require_POST
-def venta_eliminar_producto(request: HttpRequest, detalle_id: int) -> HttpResponse:
-    detalle = get_object_or_404(DetalleVenta, id=detalle_id)
-    venta = detalle.venta
-    if venta.estado != 'borrador':
-        return HttpResponse("<tr><td colspan='7' class='text-danger'>Error: Factura sellada.</td></tr>")
-    detalle.delete()
-    venta.refresh_from_db()
-    detalles = venta.detalles.all()
-    html = ""
-    if not detalles:
-        html = "<tr><td colspan='7' class='text-center text-muted py-5'>Factura en blanco. Selecciona un producto.</td></tr>"
-    else:
-        for d in detalles:
-            html += f"""
-            <tr>
-                <td>{d.producto.nombre}</td>
-                <td>{d.cantidad}</td>
-                <td>${d.precio_unitario}</td>
-                <td>${d.descuento}</td>
-                <td>{d.get_tipo_afectacion_display()}</td>
-                <td class="fw-bold">${d.subtotal}</td>
-                <td>
-                    <button hx-post="/ventas/detalle/{d.id}/eliminar/" 
-                    hx-include="[name='csrfmiddlewaretoken']"
-                    class="btn btn-sm btn-danger btn-icon">X</button>
-                </td>
-            </tr>
-            """
-    script_totales = f"""
-    <script>
-        var caja = document.getElementById('caja-totales');
-        if (caja) {{
-            caja.innerHTML = `
-                <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${venta.sumatoria_gravadas}</span></div>
-                <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${venta.sumatoria_exentas}</span></div>
-                <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${venta.iva}</span></div>
-                <h2 class="mb-0 text-success">Total: ${venta.total_pagar}</h2>
-            `;
-        }}
-    </script>
-    """
-    return HttpResponse(html + script_totales)
-
-
-
-@require_POST
 def venta_sellar(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     
-    # 1. Blindaje inicial
     if venta.estado != 'borrador':
         messages.error(request, 'Esta factura ya fue sellada o anulada.')
-        return redirect('venta_detalle', pk=venta.pk) # Ajusta el nombre de tu vista de detalle
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
         
     detalles = venta.detalles.all()
     if not detalles.exists():
         messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
-        return redirect('venta_detalle', pk=venta.pk)
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
-    # 2. Bloque Transaccional ACID (Todo o Nada)
     try:
         with transaction.atomic():
             for detalle in detalles:
                 producto = detalle.producto
-                
-                # Verificación de stock de último microsegundo
                 if detalle.cantidad > producto.stock:
                     raise ValueError(f"Stock insuficiente para {producto.nombre}. Quedan {producto.stock}.")
                 
-                # Descuento del Kardex
                 producto.stock -= detalle.cantidad
                 producto.save()
             
-            # 3. Cambio de estado de la factura
             venta.estado = 'sellada' 
             venta.save()
             
-            # --- NUEVO: SUMAR EL DINERO A LA CAJA DEL CAJERO ---
-            # Como ya obligamos a que toda venta tenga una sesion_caja, simplemente la llamamos
-            sesion = venta.sesion_caja
-            sesion.saldo_esperado += venta.total_pagar
-            sesion.save()
-            # ---------------------------------------------------
+            # ¡Adiós al bloque de sumar dinero a la caja!
             
-            messages.success(request, f'Documento sellado. Se ingresaron ${venta.total_pagar} a tu caja y se descontaron productos del Kardex.')        
+            messages.success(request, f'Documento sellado. Se descontaron los productos del Kardex. (CxC pendiente)')        
     except ValueError as e:
-        # Si algo falla, la transacción se revierte sola y mostramos el error
         messages.error(request, str(e))
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-
 
 def generar_pdf_venta(request, codigo_generacion):
     # Traemos la venta y sus detalles
@@ -829,100 +732,28 @@ def crear_ajuste(request):
     return render(request, 'core/partials/ajuste_form.html', {'form': form})
 
 
-@login_required
-def abrir_sesion_caja(request):
-    # Regla de negocio: ¿El usuario ya tiene un turno abierto?
-    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
-    
-    if sesion_activa:
-        messages.warning(request, f"Ya tienes un turno abierto en {sesion_activa.caja.nombre}. Cierra ese turno antes de abrir otro.")
-        return redirect('venta_list') 
-
-    if request.method == 'POST':
-        form = AbrirSesionCajaForm(request.POST)
-        if form.is_valid():
-            sesion = form.save(commit=False)
-            sesion.usuario = request.user
-            # El saldo esperado inicia exactamente igual al saldo inicial (no hay ventas aún)
-            sesion.saldo_esperado = sesion.saldo_inicial 
-            sesion.save()
-            
-            messages.success(request, f"Turno abierto exitosamente en {sesion.caja.nombre}.")
-            return redirect('home') # Luego lo cambiaremos para que vaya directo a vender
-    else:
-        form = AbrirSesionCajaForm()
-
-    return render(request, 'core/caja/abrir_sesion.html', {'form': form})
-
 
 @login_required
-def cerrar_sesion_caja(request):
-    # 1. Buscamos la sesión que el usuario tiene abierta actualmente
-    sesion_activa = SesionCaja.objects.filter(usuario=request.user, estado='abierta').first()
-
-    if not sesion_activa:
-        messages.warning(request, "No tienes ningún turno abierto para cerrar.")
-        return redirect('home')
-
-    if request.method == 'POST':
-        form = CerrarSesionCajaForm(request.POST, instance=sesion_activa)
-        if form.is_valid():
-            sesion = form.save(commit=False)
-            
-            # 2. Registramos la hora de cierre y calculamos el faltante/sobrante
-            sesion.fecha_cierre = timezone.now()
-            sesion.diferencia = sesion.saldo_real - sesion.saldo_esperado
-            sesion.estado = 'cerrada'
-            sesion.save()
-
-            # 3. Retroalimentación crítica basada en la auditoría
-            if sesion.diferencia == 0:
-                messages.success(request, "Turno cerrado con éxito. Caja cuadrada perfectamente.")
-            elif sesion.diferencia > 0:
-                messages.warning(request, f"Turno cerrado. Tienes un SOBRANTE de ${sesion.diferencia}. Revisa si olvidaste dar un vuelto.")
-            else:
-                messages.error(request, f"Turno cerrado. Tienes un FALTANTE de ${abs(sesion.diferencia)}. Este monto deberá ser justificado.")
-
-            return redirect('dashboard')
-    else:
-        form = CerrarSesionCajaForm(instance=sesion_activa)
-
-    context = {
-        'form': form,
-        'sesion': sesion_activa
-    }
-    return render(request, 'core/caja/cerrar_sesion.html', context)
-#Funcion que anula una venta (IMPORTANTE)
-@login_required
-@rol_requerido('Administrador') # Solo tu puedes ejecutar esto
+@rol_requerido('Administrador') 
 def anular_venta(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
 
-    # Logica de negocio: No puedes anular un borrador o algo ya anulado
     if venta.estado != 'completada' and venta.estado != 'sellada': 
         messages.error(request, "Solo puedes anular facturas que ya fueron procesadas.")
         return redirect('venta_list')
 
     if request.method == 'POST':
         try:
-            with transaction.atomic(): # Inicia la transacción blindada
-                
+            with transaction.atomic(): 
                 # 1. Reversion de Inventario (Devolver al Kardex)
                 for detalle in venta.detalles.all():
                     producto = detalle.producto
                     producto.stock += detalle.cantidad
                     producto.save()
 
-                # 2. Reversion de Caja
-                sesion = venta.sesion_caja
-                if sesion.estado == 'abierta':
-                    sesion.saldo_esperado -= venta.total_pagar
-                    sesion.save()
-                else:
-                    # Caso limite: Intentan anular una venta de ayer con la caja ya cerrada.
-                    raise Exception("No puedes anular una factura ligada a un turno de caja que ya fue cerrado. La contabilidad no cuadraría.")
+                # ¡Adiós a la reversión de caja!
 
-                # 3. Ajuste Fiscal
+                # 2. Ajuste Fiscal
                 venta.estado = 'anulada'
                 venta.sumatoria_gravadas = 0
                 venta.sumatoria_exentas = 0
@@ -931,85 +762,63 @@ def anular_venta(request, codigo_generacion):
                 venta.total_pagar = 0
                 venta.save()
 
-            messages.success(request, f"Factura anulada con éxito. Inventario devuelto y caja ajustada.")
+            messages.success(request, f"Factura anulada con éxito. Inventario devuelto al Kardex.")
         
         except Exception as e:
-            # Si algo explota (como la excepcion de la caja cerrada), cancela todo y muestra el error
             messages.error(request, f"Operación denegada: {str(e)}")
 
-    # Te regresa a la lista de ventas sin importar lo que pase
     return redirect('venta_list')
 
+
+@login_required
+def cuentas_por_cobrar_list(request):
+    # Filtramos ventas que:
+    # 1. Estén Selladas (ya son deuda real)
+    # 2. El estado de pago sea 'pendiente'
+    pendientes = Venta.objects.filter(
+        estado='sellada', 
+        estado_pago='pendiente'
+    ).order_by('fecha_hora_emision')
+
+    # Cálculo rápido para el resumen superior
+    total_por_cobrar = sum(v.total_pagar for v in pendientes)
+    conteo_facturas = pendientes.count()
+
+    context = {
+        'pendientes': pendientes,
+        'total_por_cobrar': total_por_cobrar,
+        'conteo_facturas': conteo_facturas,
+    }
+    return render(request, 'core/cxc_list.html', context)
+
+
 @login_required
 @require_POST
-def registrar_movimiento_caja(request, sesion_id):
-    sesion = get_object_or_404(SesionCaja, id=sesion_id)
+def registrar_pago_factura(request, codigo_generacion):
+    # BUSQUEDA SEGURA: Solo facturas selladas que aún deban dinero
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion, estado='sellada', estado_pago='pendiente')
     
-    # Candado 1: La caja debe estar abierta
-    if sesion.estado != 'abierta':
-        messages.error(request, "Error: No puedes registrar movimientos en un turno cerrado.")
-        return redirect(request.META.get('HTTP_REFERER', 'home'))
+    metodo = request.POST.get('metodo_pago')
+    referencia = request.POST.get('comprobante_pago', '').strip()
+    
+    # 1. Validación de seguridad: No permitimos campos vacíos en el método
+    if not metodo:
+        messages.error(request, "Error: Debes seleccionar un método de pago.")
+        return redirect('cxc_list')
+
+    # 2. Proceso de Cobro (Transaccional)
+    try:
+        with transaction.atomic():
+            venta.metodo_pago = metodo
+            # Guardamos una huella de auditoría en las observaciones para que no se pierda el dato
+            info_pago = f"\n[PAGO REGISTRADO EL {timezone.now().strftime('%d/%m/%Y %H:%M')}] - Ref: {referencia}"
+            venta.observaciones = (venta.observaciones or "") + info_pago
+            
+            venta.estado_pago = 'pagado'
+            venta.save()
+            
+            messages.success(request, f"Factura {venta.codigo_generacion|stringformat:'s'|slice:':8'} saldada con éxito.")
+    except Exception as e:
+        messages.error(request, f"Error crítico al registrar el pago: {str(e)}")
         
-    tipo = request.POST.get('tipo')
-    descripcion = request.POST.get('descripcion')
-    
-    try:
-        monto = Decimal(request.POST.get('monto', '0'))
-        if monto <= 0:
-            raise ValueError
-    except:
-        messages.error(request, "Error: El monto ingresado no es válido.")
-        return redirect(request.META.get('HTTP_REFERER', 'home'))
-
-    # Candado 2: Evitar saldos negativos (No puedes sacar lo que no tienes)
-    if tipo == 'egreso' and monto > sesion.saldo_esperado:
-        messages.error(request, f"Fondos insuficientes. Intenas sacar ${monto} pero la caja solo tiene ${sesion.saldo_esperado}.")
-        return redirect(request.META.get('HTTP_REFERER', 'home'))
-
-    # Si pasa los candados, creamos el registro
-    # (Tu modelo ya se encarga de sumar o restar matemáticamente en el método save)
-    MovimientoCaja.objects.create(
-        sesion_caja=sesion,
-        usuario=request.user,
-        tipo=tipo,
-        monto=monto,
-        descripcion=descripcion
-    )
-    
-    messages.success(request, f"{tipo.capitalize()} de ${monto} registrado correctamente.")
-    
-    # El referer te devuelve a la página exacta donde estabas
-    return redirect(request.META.get('HTTP_REFERER', 'home'))
-
-
-@login_required
-@require_POST
-def cerrar_sesion_caja(request, sesion_id):
-    # Candado: Solo el dueño de la caja puede cerrarla y debe estar abierta
-    sesion = get_object_or_404(SesionCaja, id=sesion_id, usuario=request.user, estado='abierta')
-    
-    try:
-        saldo_fisico = Decimal(request.POST.get('saldo_fisico', '0'))
-        if saldo_fisico < 0:
-            raise ValueError
-    except:
-        messages.error(request, "Error: Ingresa un monto físico válido.")
-        return redirect(request.META.get('HTTP_REFERER', 'home'))
-
-    # Matemática del Cierre Ciego
-    # Diferencia = Lo que hay físicamente - Lo que el sistema esperaba
-    # Si da negativo, es un Faltante (le falta plata). Si da positivo, es un Sobrante.
-    diferencia = saldo_fisico - sesion.saldo_esperado
-    
-    # Sellamos la caja
-    sesion.saldo_fisico = saldo_fisico
-    sesion.diferencia = diferencia
-    sesion.fecha_hora_cierre = timezone.now()
-    sesion.estado = 'cerrada'
-    sesion.save()
-
-    # Le damos retroalimentación genérica al cajero, NO le decimos de cuánto fue su descuadre
-    messages.success(request, f"Turno cerrado exitosamente. El reporte ha sido guardado para auditoría.")
-    
-    # Lo sacamos de la pantalla de ventas porque ya no tiene caja abierta
-    return redirect('home')
+    return redirect('cxc_list')

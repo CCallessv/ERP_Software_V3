@@ -13,17 +13,6 @@
             </div>
             <div class="col-auto ms-auto d-print-none">
               <div class="btn-list">
-                {% if sesion_activa %}
-                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modal-movimiento-caja">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M17 8v-3a1 1 0 0 0 -1 -1h-10a2 2 0 0 0 0 4h12a1 1 0 0 1 1 1v3m0 4v3a1 1 0 0 1 -1 1h-12a2 2 0 0 1 -2 -2v-12" /><path d="M20 12v4h-4a2 2 0 0 1 0 -4h4" /></svg>
-                    Caja Chica
-                </button>
-
-                <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modal-cerrar-caja">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="icon me-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 6a7.75 7.75 0 1 0 10 0" /><path d="M12 4l0 8" /></svg>
-                  Cerrar Turno
-              </button>
-                {% endif %}
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal-nueva-venta">
                         <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
                         Nueva Venta
@@ -76,7 +65,7 @@
                           
                                   {% if venta.estado == 'completada' or venta.estado == 'sellada' %}
                                       {% if request.user|tiene_rol:"Administrador" %}
-                                      <form action="{% url 'anular_venta' venta.codigo_generacion %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Estás absolutamente seguro de anular esta factura? Se devolverá el stock y se restará de la caja.');">
+                                      <form action="{% url 'anular_venta' venta.codigo_generacion %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Estás absolutamente seguro de anular esta factura? Se devolverá el stock al kardex.');">
                                           {% csrf_token %}
                                           <button type="submit" class="btn btn-sm btn-danger" title="Anular Documento">
                                               <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></svg>
@@ -146,106 +135,5 @@
         
       </div>
     </div>
-  </div>
-  {% if sesion_activa %}
-<div class="modal modal-blur fade" id="modal-movimiento-caja" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Registrar Ingreso / Egreso</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      
-      <form action="{% url 'registrar_movimiento_caja' sesion_activa.id %}" method="POST">
-        {% csrf_token %}
-        <div class="modal-body">
-          
-          <div class="mb-3">
-            <label class="form-label required">Tipo de Movimiento</label>
-            <div class="form-selectgroup form-selectgroup-boxes d-flex flex-row">
-                <label class="form-selectgroup-item flex-fill">
-                  <input type="radio" name="tipo" value="ingreso" class="form-selectgroup-input" checked>
-                  <div class="form-selectgroup-label d-flex align-items-center p-3">
-                    <div class="me-3"><span class="form-selectgroup-check"></span></div>
-                    <div>
-                      <span class="text-success fw-bold">Ingreso (+)</span>
-                      <div class="text-muted small">Sencillo extra.</div>
-                    </div>
-                  </div>
-                </label>
-                <label class="form-selectgroup-item flex-fill ms-2">
-                  <input type="radio" name="tipo" value="egreso" class="form-selectgroup-input">
-                  <div class="form-selectgroup-label d-flex align-items-center p-3">
-                    <div class="me-3"><span class="form-selectgroup-check"></span></div>
-                    <div>
-                      <span class="text-danger fw-bold">Egreso (-)</span>
-                      <div class="text-muted small">Gastos o retiros.</div>
-                    </div>
-                  </div>
-                </label>
-            </div>
-          </div>
-
-          <div class="row">
-              <div class="col-md-12 mb-3">
-                  <label class="form-label required">Monto Exacto ($)</label>
-                  <input type="number" name="monto" class="form-control" step="0.01" min="0.01" required placeholder="0.00">
-              </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label required">Motivo o Justificación</label>
-            <input type="text" name="descripcion" class="form-control" required placeholder="Ej. Pago de proveedor de agua">
-          </div>
-
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn me-auto" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Registrar Movimiento</button>
-        </div>
-      </form>
-    </div>
-  </div>
 </div>
-{% endif %}
-
-{% if sesion_activa %}
-<div class="modal modal-blur fade" id="modal-cerrar-caja" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" role="document">
-    <div class="modal-content">
-      <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title">Corte Z - Cierre de Turno</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      
-      <form action="{% url 'cerrar_sesion_caja' sesion_activa.id %}" method="POST" onsubmit="return confirm('¿Estás seguro de cerrar el turno? Ya no podrás facturar hasta abrir uno nuevo.');">
-        {% csrf_token %}
-        <div class="modal-body text-center py-4">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-lock-square-rounded text-danger mb-2" width="48" height="48" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9 -9 9s-9 -1.8 -9 -9s1.8 -9 9 -9z" /><path d="M8 11m0 1a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1z" /><path d="M10 11v-2a2 2 0 1 1 4 0v2" /></svg>
-          
-          <h3>Declaración de Efectivo</h3>
-          <p class="text-muted">Cuenta todo el dinero físico en tu gaveta e ingrésalo a continuación. Cualquier diferencia será reportada a gerencia.</p>
-
-          <div class="row justify-content-center mt-3">
-              <div class="col-md-8">
-                  <div class="input-group input-group-flat">
-                    <span class="input-group-text fw-bold fs-2">$</span>
-                    <input type="number" name="saldo_fisico" class="form-control text-center fw-bold fs-2 text-primary" step="0.01" min="0" required placeholder="0.00">
-                  </div>
-              </div>
-          </div>
-
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn me-auto" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-danger">Sellar y Cerrar Caja</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
-
-

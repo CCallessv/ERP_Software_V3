@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Cuentas por Cobrar</h2>
+                <div class="text-muted mt-1">Gestión de cartera y facturas pendientes de pago</div>
+            </div>
+            <div class="col-auto ms-auto">
+                <div class="d-flex">
+                    <div class="me-3 text-end">
+                        <div class="text-muted">Total Pendiente</div>
+                        <div class="h2 m-0 text-danger">${{ total_por_cobrar|floatformat:2 }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted">Facturas</div>
+                        <div class="h2 m-0">{{ conteo_facturas }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha Emisión</th>
+                            <th>Cliente / Documento</th>
+                            <th>Condición</th>
+                            <th>Vencimiento (Días)</th>
+                            <th>Monto</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for venta in pendientes %}
+
+                        <div class="modal modal-blur fade" id="modal-pago-{{ venta.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                            <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Registrar Pago: ${{ venta.total_pagar }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <form action="{% url 'registrar_pago' venta.codigo_generacion %}" method="POST">
+                                        {% csrf_token %}
+                                        <div class="mb-3">
+                                            <label class="form-label required">Método de Pago</label>
+                                            <select name="metodo_pago" class="form-select" required>
+                                                <option value="transferencia">Transferencia Bancaria</option>
+                                                <option value="cheque">Cheque</option>
+                                                <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                                                <option value="efectivo">Efectivo (Oficina)</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Número de Referencia</label>
+                                            <input type="text" name="comprobante_pago" class="form-control" placeholder="Ej: Transf #998877">
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Confirmar Ingreso de Dinero</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <tr>
+                            <td class="text-muted">{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
+                            <td>
+                                <div class="fw-bold">{{ venta.cliente.nombres }}</div>
+                                <div class="text-muted small">{{ venta.tipo_documento }} - {{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}</div>
+                            </td>
+                            <td>
+                                <span class="badge {% if venta.condicion_pago == 'credito' %}bg-purple-lt{% else %}bg-azure-lt{% endif %}">
+                                    {{ venta.get_condicion_pago_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="text-muted">{{ venta.dias_credito }} días plazo</span>
+                            </td>
+                            <td class="fw-bold text-dark">${{ venta.total_pagar }}</td>
+                            <td>
+                                <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-pago-{{ venta.id }}">
+                                    Registrar Pago
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                No hay facturas pendientes de cobro. ¡Cartera limpia!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
