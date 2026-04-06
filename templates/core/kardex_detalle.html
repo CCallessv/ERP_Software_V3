@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <div class="mb-1">
+                    <a href="{% url 'kardex_list' %}" class="text-muted text-decoration-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-1" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l14 0" /><path d="M5 12l6 6" /><path d="M5 12l6 -6" /></svg>
+                        Volver al Inventario
+                    </a>
+                </div>
+                <h2 class="page-title">
+                    Kardex: {{ producto.nombre }}
+                </h2>
+                <div class="text-muted mt-1">
+                    Código: {{ producto.id }} | 
+                    Stock Actual: 
+                    <strong class="{% if producto.stock <= 0 %}text-danger{% elif producto.stock <= producto.stock_minimo %}text-warning{% else %}text-secondary-lt{% endif %}">
+                        {{ producto.stock }} {{ producto.unidad_medida_base }}
+                    </strong>
+                </div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <button onclick="window.print()" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M17 17h2a2 2 0 0 0 2 -2v-4a2 2 0 0 0 -2 -2h-14a2 2 0 0 0 -2 2v4a2 2 0 0 0 2 2h2" /><path d="M17 9v-4a2 2 0 0 0 -2 -2h-6a2 2 0 0 0 -2 2v4" /><path d="M7 13m0 2a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2z" /></svg>
+                    Imprimir Reporte
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table card-table table-vcenter text-nowrap datatable">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <th>Documento / Motivo</th>
+                            <th class="text-center">Entradas (+)</th>
+                            <th class="text-center">Salidas (-)</th>
+                            <th>Registrado por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimientos %}
+                        <tr>
+                            <td class="text-muted">{{ mov.fecha|date:"d/m/Y" }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if mov.origen == 'Compra' %}bg-blue-lt
+                                    {% elif mov.origen == 'Venta' %}bg-teal-lt
+                                    {% else %}bg-orange-lt{% endif %}">
+                                    {{ mov.origen }}
+                                </span>
+                            </td>
+                            <td class="text-secondary">{{ mov.documento }}</td>
+                            
+                            <td class="text-center fw-bold text-success">
+                                {% if mov.entrada > 0 %} +{{ mov.entrada|floatformat:2 }} {% else %} - {% endif %}
+                            </td>
+                            
+                            <td class="text-center fw-bold text-danger">
+                                {% if mov.salida > 0 %} -{{ mov.salida|floatformat:2 }} {% else %} - {% endif %}
+                            </td>
+                            
+                            <td class="text-muted small">{{ mov.usuario }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                No hay registros de movimientos para este producto aún.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

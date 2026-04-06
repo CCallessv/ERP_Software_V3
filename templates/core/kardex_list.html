@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Control de Inventario (Kardex)</h2>
+                <div class="text-muted mt-1">Gestión de existencias y valorización de bodega</div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <div class="d-flex align-items-center">
+                    <div class="me-4 text-end">
+                        <div class="text-muted">Valor en Bodega (Costo)</div>
+                        <div class="h2 m-0 text-primary">${{ valor_total_bodega|floatformat:2 }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted">Alertas de Stock</div>
+                        {% if productos_criticos > 0 %}
+                            <div class="h2 m-0 text-danger">{{ productos_criticos }} Críticos</div>
+                        {% else %}
+                            <div class="h2 m-0 text-success">Inventario Sano</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table text-nowrap datatable">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Ubicación</th>
+                            <th>Costo Unit.</th>
+                            <th>Stock Actual</th>
+                            <th>Estado</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for producto in productos %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold">{{ producto.nombre }}</div>
+                                <div class="text-muted small">Cod: {{ producto.id }} | {{ producto.unidad_medida_base }}</div>
+                            </td>
+                            <td>{{ producto.categoria.nombre|default:"Sin Categoría" }}</td>
+                            <td class="text-muted">{{ producto.ubicacion|default:"No asignada" }}</td>
+                            <td>${{ producto.precio_costo }}</td>
+                            
+                            <td class="fs-3 fw-bold {% if producto.stock <= producto.stock_minimo %}text-danger{% endif %}">
+                                {{ producto.stock }}
+                            </td>
+                            
+                            <td>
+                                {% if producto.stock <= 0 %}
+                                    <span class="badge bg-red-lt">Agotado</span>
+                                {% elif producto.stock <= producto.stock_minimo %}
+                                    <span class="badge bg-orange-lt">Reabastecer</span>
+                                {% else %}
+                                    <span class="badge bg-green-lt">Óptimo</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td>
+                                <a href="{% url 'kardex_detalle' producto.id %}" class="btn btn-sm btn-outline-secondary">
+                                    Ver Movimientos
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                No hay productos registrados en el inventario.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

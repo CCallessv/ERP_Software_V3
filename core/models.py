@@ -175,9 +175,6 @@ class Proveedor(models.Model):
     # --- Credito ---
     limite_credito = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     dias_credito = models.PositiveIntegerField(default=0, help_text="Días de plazo para pagar facturas")
-
-    # --- El "Comodin" para Generalizar ---
-    # Requiere que uses Postgres o Django 3.0+ (JSONField)
     # Aquí puedes guardar cosas como: "Frecuencia de visita", "Día de pago", etc.
     extra_data = models.JSONField(default=dict, blank=True, verbose_name="Datos Adicionales")
 

@@ -19,22 +19,20 @@ from django.urls import path
 from django.contrib.auth import views as auth_views 
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
-from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura
-from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste
+from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
+from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
     # Ruta de Login (Usando la plantilla personalizada)
     path('login/', auth_views.LoginView.as_view(template_name='core/login.html'), name='login'),
-    path('crear_cliente/', crear_cliente, name='crear_cliente'),
-    # Ruta de Logout (Cerrar sesión)
     path('logout/', exit, name='logout'),
     #ruta clientes
     path('clientes/', clientes_list, name='clientes_list'),
-    #editar cliente en donde le pasamos el id aqui /<int:pk>/
-    path('editar_cliente/<int:pk>/', editar_cliente, name='editar_cliente'),
-    #eliminar cliente siemore pasando el id en esta parte <int:pk>
-    path('eliminar_cliente/<int:pk>/', eliminar_cliente, name='eliminar_cliente'),
+    path('clientes/nuevo/', crear_cliente, name='crear_cliente'),
+    path('clientes/editar/<int:pk>/', editar_cliente, name='editar_cliente'),
+    path('clientes/eliminar/<int:pk>/', eliminar_cliente, name='eliminar_cliente'),
+
     #aca lilstamos los proudcto de la lista 
     path('inventario/', productos_list, name='productos_list'),
     #crear un producto nuevo desde forms
@@ -83,6 +81,9 @@ urlpatterns = [
 
     path('cxc/', cuentas_por_cobrar_list, name='cxc_list'),
     path('cxc/pagar/<uuid:codigo_generacion>/', registrar_pago_factura, name='registrar_pago'),
+    # Módulo de Inventario / Kardex
+    path('inventario/kardex/', kardex_list, name='kardex_list'),
+    path('inventario/kardex/<int:producto_id>/', kardex_detalle, name='kardex_detalle'),
     
    
 ]

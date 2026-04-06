@@ -1,36 +1,48 @@
-<div class="modal modal-blur fade" id="modal-eliminar-cliente" tabindex="-1" aria-hidden="true" role="dialog">
-  <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-    <div class="modal-content">
+<div class="modal modal-blur fade" id="modal-eliminar-cliente" tabindex="-1" aria-hidden="true" style="display: block;">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
       
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      
-      <div class="modal-status bg-danger"></div>
-      
-      <div class="modal-body text-center py-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+      <div class="modal-content">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         
-        <h3>¿Estás seguro?</h3>
-        <div class="text-secondary">
-          ¿Deseas dar de baja al cliente <strong>{{ cliente.nombres }}</strong>?
+        <div class="modal-status bg-danger"></div>
+        
+        <div class="modal-body text-center py-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+              <path d="M12 9v4" />
+              <path d="M12 16v.01" />
+              <path d="M3.16 7.44l8.56 -5.35a1.14 1.14 0 0 1 1.12 0l8.56 5.35a1.14 1.14 0 0 1 .56 .98v8.36a1.14 1.14 0 0 1 -.56 .98l-8.56 5.35a1.14 1.14 0 0 1 -1.12 0l-8.56 -5.35a1.14 1.14 0 0 1 -.56 -.98v-8.36a1.14 1.14 0 0 1 .56 -.98z" />
+          </svg>
+          <h3>¿Desactivar cliente?</h3>
+          <div class="text-secondary">
+              Estás a punto de dar de baja a <strong>{{ cliente.nombres }}</strong>. 
+              <br><br>Ya no aparecerá en la lista principal ni podrá hacer nuevas transacciones, pero su historial financiero se mantendrá seguro.
+          </div>
         </div>
-      </div>
-      
-      <div class="modal-footer">
-        <div class="w-100">
-          <div class="row">
-            <div class="col">
-              <button class="btn w-100" data-bs-dismiss="modal">Cancelar</button>
-            </div>
-            <div class="col">
-              <form hx-post="{% url 'eliminar_cliente' cliente.pk %}" hx-target="#modal-container">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-danger w-100">Sí, eliminar</button>
-              </form>
+        
+        <div class="modal-footer">
+          <div class="w-100">
+            <div class="row">
+              <div class="col">
+                <a href="#" class="btn w-100" data-bs-dismiss="modal">
+                  Cancelar
+                </a>
+              </div>
+              <div class="col">
+                <form hx-post="{% url 'eliminar_cliente' cliente.pk %}" 
+                      hx-target="closest .modal-content"
+                      hx-select=".modal-content"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger w-100">
+                      Desactivar
+                    </button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
+  
       </div>
-      
     </div>
   </div>
-</div>

@@ -15,6 +15,8 @@ from xhtml2pdf import pisa
 from django.utils import timezone
 from .models import Producto, Venta
 from .decorators import rol_requerido
+from itertools import chain
+from operator import attrgetter
 
 from .forms import (
     ProductoForm,
@@ -99,6 +101,30 @@ def exit(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
 
+def clientes_list(request: HttpRequest) -> HttpResponse:
+    search_query = request.GET.get('q', '')
+    queryset = Cliente.objects.all().order_by('-id')
+    
+    if search_query:
+        queryset = queryset.filter(
+            Q(nombres__icontains=search_query) | Q(documento__icontains=search_query)
+        )
+        
+    paginator = Paginator(queryset, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    # Si la petición es de HTMX y NO es para abrir el modal (ej. buscador o paginación)
+    if request.headers.get('HX-Request') and request.headers.get('HX-Target') == 'tabla-clientes-body':
+        return render(request, 'core/partials/clientes_rows.html', {'page_obj': page_obj})
+        
+    context = {
+        'page_obj': page_obj,
+        'total_clientes': Cliente.objects.count(),
+        'activos': Cliente.objects.filter(estado=True).count(),
+        'inactivos': Cliente.objects.filter(estado=False).count(),
+        'search_query': search_query
+    }
+    return render(request, 'core/clientes_list.html', context)
 
 def crear_cliente(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
@@ -108,10 +134,10 @@ def crear_cliente(request: HttpRequest) -> HttpResponse:
             response = HttpResponse(status=204)
             response['HX-Refresh'] = 'true'
             return response
-    else:
-        form = ClienteForm()
-    return render(request, 'core/partials/modal_cliente.html', {'form': form})
-
+        return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': None})
+        
+    form = ClienteForm()
+    return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': None})
 
 def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
@@ -120,45 +146,26 @@ def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'actualizarTablaClientes'
+            response['HX-Refresh'] = 'true'
             return response
-    else:
-        form = ClienteForm(instance=cliente)
+        return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': cliente})
+        
+    form = ClienteForm(instance=cliente)
     return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': cliente})
-
 
 def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
+    
     if request.method == 'POST':
-        cliente.delete()
-        return render(request, 'core/partials/cliente_creado.html')
+        # SOFT DELETE: En lugar de destruir, inactivamos el registro
+        cliente.estado = False
+        cliente.save()
+        
+        response = HttpResponse(status=204)
+        response['HX-Refresh'] = 'true'
+        return response
+        
     return render(request, 'core/partials/modal_eliminarCliente.html', {'cliente': cliente})
-
-
-def clientes_list(request: HttpRequest) -> HttpResponse:
-    queryset = Cliente.objects.all().order_by('-id')
-    search_query = request.GET.get('q', '')
-    if search_query:
-        queryset = queryset.filter(
-            Q(nombres__icontains=search_query) |
-            Q(documento__icontains=search_query)
-        )
-    paginator = Paginator(queryset, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    if request.headers.get('HX-Request'):
-        return render(request, 'core/partials/clientes_rows.html', {'page_obj': page_obj})
-    total = Cliente.objects.count()
-    activos = Cliente.objects.filter(estado=True).count()
-    inactivos = Cliente.objects.filter(estado=False).count()
-    context = {
-        'page_obj': page_obj,
-        'total_clientes': total,
-        'activos': activos,
-        'inactivos': inactivos,
-        'search_query': search_query
-    }
-    return render(request, 'core/clientes_list.html', context)
 
 
 def productos_list(request: HttpRequest) -> HttpResponse:
@@ -242,21 +249,38 @@ def eliminar_producto(request: HttpRequest, pk: int) -> HttpResponse:
 
 def proveedor_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
-    proveedores = Proveedor.objects.filter(activo=True)
+    
+    # 1. Filtramos solo los activos por defecto, ordenados por ID descendente
+    proveedores = Proveedor.objects.filter(activo=True).order_by('-id')
+    
+    # 2. Aplicamos la búsqueda si existe
     if busqueda:
         proveedores = proveedores.filter(
             Q(nombre_comercial__icontains=busqueda) |
             Q(nit__icontains=busqueda) |
             Q(contacto_nombre__icontains=busqueda)
         )
+    
+    # 3. Paginación (¡Crucial para no colgar la base de datos con 5000 proveedores!)
+    paginator = Paginator(proveedores, 10) # 10 por página
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    # 4. Construimos el contexto con tus contadores específicos
     context = {
-        'proveedores': proveedores,
+        'page_obj': page_obj, # Usamos page_obj en lugar de la lista cruda
+        'busqueda': busqueda,
         'total_proveedores': Proveedor.objects.filter(activo=True).count(),
         'grandes_contribuyentes': Proveedor.objects.filter(activo=True, clasificacion='grande').count(),
         'creditos_activos': Proveedor.objects.filter(activo=True, dias_credito__gt=0).count(),
+        'activos': Proveedor.objects.filter(activo=True).count(),      
+        'inactivos': Proveedor.objects.filter(activo=False).count(),
     }
-    if request.headers.get('HX-Request'):
+    
+    # 5. La magia de HTMX para la búsqueda/paginación
+    # Si la petición es de HTMX y viene del buscador o paginador (no del modal)
+    if request.headers.get('HX-Request') and request.headers.get('HX-Target') == 'tabla-proveedores-body':
         return render(request, 'core/partials/proveedor_table_rows.html', context)
+        
     return render(request, 'core/proveedor_list.html', context)
 
 
@@ -265,14 +289,16 @@ def proveedor_crear(request: HttpRequest) -> HttpResponse:
         form = ProveedorForm(request.POST)
         if form.is_valid():
             form.save()
+            # Cierra el modal y refresca la tabla entera
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'proveedorActualizado'
+            response['HX-Refresh'] = 'true'
             return response
-        else:
-            print("ERRORES DEL FORMULARIO:", form.errors)
-    else:
-        form = ProveedorForm()
-    return render(request, 'core/partials/proveedor_form.html', {'form': form})
+        
+        # Si hay errores, devolvemos el HTML del modal para que HTMX actualice el cuadro blanco
+        return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': None})
+        
+    form = ProveedorForm()
+    return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': None})
 
 
 def proveedor_editar(request: HttpRequest, pk: int) -> HttpResponse:
@@ -282,23 +308,25 @@ def proveedor_editar(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             form.save()
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'proveedorActualizado'
+            response['HX-Refresh'] = 'true'
             return response
-    else:
-        form = ProveedorForm(instance=proveedor)
-    return render(request, 'core/partials/proveedor_form.html', {'form': form})
+            
+        return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': proveedor})
+        
+    form = ProveedorForm(instance=proveedor)
+    return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': proveedor})
 
 
 def eliminar_proveedor(request: HttpRequest, pk: int) -> HttpResponse:
     proveedor = get_object_or_404(Proveedor, pk=pk)
     if request.method == 'POST':
-        proveedor.activo = False
+        proveedor.activo = False # El Soft Delete
         proveedor.save()
         response = HttpResponse(status=204)
-        response['HX-Trigger'] = 'proveedorActualizado'
+        response['HX-Refresh'] = 'true'
         return response
-    return render(request, 'core/partials/proveedor_confirm_delete.html', {'proveedor': proveedor})
-
+        
+    return render(request, 'core/partials/Proveedor_confirm_delete.html', {'proveedor': proveedor})
 
 def categorias_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
@@ -822,3 +850,91 @@ def registrar_pago_factura(request, codigo_generacion):
         messages.error(request, f"Error crítico al registrar el pago: {str(e)}")
         
     return redirect('cxc_list')
+
+
+@login_required
+def kardex_detalle(request, producto_id):
+    producto = get_object_or_404(Producto, id=producto_id)
+    
+    # 1. Traer Salidas (Ventas Selladas)
+    # Extraemos los detalles de venta que pertenecen a facturas selladas
+    salidas_venta = DetalleVenta.objects.filter(
+        producto=producto, 
+        venta__estado='sellada'
+    ).select_related('venta')
+
+    # 2. Traer Entradas (Compras)
+    entradas_compra = DetalleCompra.objects.filter(
+        producto=producto
+    ).select_related('compra')
+
+    # 3. Traer Ajustes de Inventario
+    ajustes = AjusteInventario.objects.filter(producto=producto)
+
+    # --- UNIFICACIÓN DE DATOS ---
+    movimientos = []
+
+    for salida in salidas_venta:
+        movimientos.append({
+            'fecha': salida.venta.fecha_hora_emision,
+            'origen': 'Venta',
+            'documento': f"{salida.venta.tipo_documento} - {str(salida.venta.codigo_generacion)[:8]}",
+            'entrada': 0,
+            'salida': salida.cantidad,
+            'usuario': "Sistema (Facturación)"
+        })
+
+    for entrada in entradas_compra:
+        # Asumimos que tu modelo Compra tiene un campo fecha_compra
+        movimientos.append({
+            'fecha': entrada.compra.fecha_compra, 
+            'origen': 'Compra',
+            'documento': f"Doc. Prov: {entrada.compra.numero_comprobante}",
+            'entrada': entrada.cantidad,
+            'salida': 0,
+            'usuario': "Sistema (Compras)"
+        })
+
+    for ajuste in ajustes:
+        # Asumimos que tu modelo AjusteInventario tiene un campo de fecha o creacion
+        movimientos.append({
+            'fecha': ajuste.id, # IMPORTANTE: Si tu modelo Ajuste no tiene fecha, usa un campo que tengas. Idealmente deberías tener un auto_now_add.
+            'origen': 'Ajuste Manual',
+            'documento': ajuste.motivo,
+            'entrada': ajuste.cantidad if ajuste.tipo == 'ingreso' else 0,
+            'salida': ajuste.cantidad if ajuste.tipo == 'egreso' else 0,
+            'usuario': ajuste.usuario.username if hasattr(ajuste, 'usuario') else "Administrador"
+        })
+
+    # Ordenamos todos los movimientos por fecha (del más antiguo al más reciente)
+    # Nota: Asegúrate de que todos los campos 'fecha' existan en tus modelos.
+    try:
+        movimientos.sort(key=lambda x: x['fecha'])
+    except Exception:
+        pass # Si hay un error mezclando datetime y date, lo saltamos por seguridad básica
+
+    context = {
+        'producto': producto,
+        'movimientos': movimientos,
+    }
+    return render(request, 'core/kardex_detalle.html', context)    
+
+
+@login_required
+def kardex_list(request):
+    # Traemos todos los productos activos
+    productos = Producto.objects.filter(activo=True).order_by('nombre')
+    
+    # Inteligencia básica: Contamos cuántos productos están por debajo o igual a su stock mínimo
+    # Usamos F() para comparar dos campos del mismo modelo directamente en la base de datos
+    productos_criticos = productos.filter(stock__lte=F('stock_minimo')).count()
+    
+    # Valorización del inventario (¿Cuánto dinero tenemos en la bodega a precio de costo?)
+    valor_total_bodega = sum(p.stock * p.precio_costo for p in productos)
+
+    context = {
+        'productos': productos,
+        'productos_criticos': productos_criticos,
+        'valor_total_bodega': valor_total_bodega,
+    }
+    return render(request, 'core/kardex_list.html', context)    

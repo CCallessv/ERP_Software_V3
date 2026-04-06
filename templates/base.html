@@ -130,6 +130,24 @@
                             </a>
                         </li>
                         
+
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'kardex_list' %}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                        <path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" />
+                                        <path d="M12 12l8 -4.5" />
+                                        <path d="M12 12l0 9" />
+                                        <path d="M12 12l-8 -4.5" />
+                                        <path d="M16 5.25l-8 4.5" />
+                                    </svg>
+                                </span>
+                                <span class="nav-link-title">
+                                    Kardex / Bodega
+                                </span>
+                            </a>
+                        </li>
                     
                         <hr class="my-3">
                         
@@ -223,39 +241,80 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/js/tabler.min.js"></script>
+    <script src="https://unpkg.com/imask"></script>
     <script src="{% static 'js/inventario.js' %}"></script>
     <script src="{% static 'js/modal_productos_handler.js' %}"></script>
 
     <script>
+        function aplicarMascaras() {
+            const inputDoc = document.getElementById('id_documento');
+            const inputTel = document.getElementById('id_telefono');
+            const inputNrc = document.getElementById('id_nrc');
+
+            const inputNitProv = document.getElementById('id_nit_proveedor');
+            const inputNrcProv = document.getElementById('id_nrc_proveedor');
+            const inputTelProv = document.getElementById('id_telefono_proveedor');
+
+            if (inputNitProv) IMask(inputNitProv, { mask: '0000-000000-000-0' });
+            if (inputNrcProv) IMask(inputNrcProv, { mask: /^[0-9-]{0,9}$/ });
+            if (inputTelProv) IMask(inputTelProv, { mask: '0000-0000' });
+    
+            if (inputDoc) {
+                // Máscara dinámica para DUI o NIT (¡Esta funciona perfecto porque son fijos!)
+                IMask(inputDoc, {
+                    mask: [
+                        { mask: '00000000-0' }, 
+                        { mask: '0000-000000-000-0' } 
+                    ]
+                });
+            }
+    
+            if (inputTel) {
+                IMask(inputTel, { mask: '0000-0000' });
+            }
+    
+            if (inputNrc) {
+                // CORRECCIÓN: Permite escribir libremente solo números y guiones (máx 9 caracteres).
+                // Nuestro super forms.py se encargará de formatearlo bien al guardar.
+                IMask(inputNrc, { mask: /^[0-9-]{0,9}$/ }); 
+            }
+        }
+        // ------------------------------------------------
+    
+        // 1. ESCUCHA CUANDO HTMX TERMINA DE CARGAR EL MODAL
         document.body.addEventListener("htmx:afterSwap", function(evt) {
             if (evt.detail.target.id === "modal-container") {
-                let modalElement = document.querySelector('#modal-container .modal');
+                const modalElement = document.querySelector('#modal-container .modal');
                 if (modalElement) {
-                    let modal = new bootstrap.Modal(modalElement);
+                    const oldModal = bootstrap.Modal.getInstance(modalElement);
+                    if (oldModal) { oldModal.hide(); }
+                    
+                    const modal = new bootstrap.Modal(modalElement);
                     modal.show();
+    
+                    // LLLAMAMOS A LA FUNCIÓN JUSTO AQUÍ, CUANDO EL FORM YA EXISTE
+                    aplicarMascaras();
                 }
             }
         });
-
-        document.body.addEventListener('htmx:beforeSwap', function(evt) {
+    
+        // 2. CIERRA EL MODAL CUANDO DJANGO RESPONDE 204 (ÉXITO)
+        document.body.addEventListener("htmx:beforeSwap", function(evt) {
             if (evt.detail.xhr.status === 204) {
-                var openModal = document.querySelector('.modal.show');
+                const openModal = document.querySelector('.modal.show');
                 if (openModal) {
-                    var modalInstance = bootstrap.Modal.getInstance(openModal);
+                    const modalInstance = bootstrap.Modal.getInstance(openModal);
                     if (modalInstance) { modalInstance.hide(); }
                 }
-                setTimeout(function() {
-                    document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) { backdrop.remove(); });
-                    document.body.classList.remove('modal-open'); 
-                    document.body.style.overflow = '';
-                    document.body.style.paddingRight = '';
-                }, 250); 
             }
         });
-
-        document.body.addEventListener("hidden.bs.modal", function () {
-            let container = document.getElementById("modal-container");
-            if (container) { container.innerHTML = ""; }
+    
+        // 3. LA PURGA TOTAL
+        document.body.addEventListener("hidden.bs.modal", function(evt) {
+            const container = document.getElementById("modal-container");
+            if (container) {
+                container.innerHTML = ""; 
+            }
         });
     </script>
 

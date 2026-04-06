@@ -1,134 +1,150 @@
 {% load static %}
 
-<div class="modal-content">
-    <div class="modal-header">
-        <h5 class="modal-title">
-            {% if form.instance.pk %}Editar Proveedor{% else %}Nuevo Proveedor{% endif %}
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="modal modal-blur fade" id="modal-proveedor" tabindex="-1" aria-hidden="true" style="display: block;">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                {% if form.instance.pk %}Editar Proveedor{% else %}Nuevo Proveedor{% endif %}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <form hx-post="{% if form.instance.pk %}{% url 'proveedor_editar' form.instance.pk %}{% else %}{% url 'proveedor_crear' %}{% endif %}" 
+              hx-target="closest .modal-content"
+              hx-select=".modal-content"
+              hx-swap="outerHTML"
+              novalidate autocomplete="off">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="alert alert-danger m-3" role="alert">
+                <div class="d-flex">
+                    <div>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+                    </div>
+                    <div>
+                        <h4 class="alert-title">Verifica los campos del formulario</h4>
+                        <div class="text-secondary">Revisa las pestañas marcadas en rojo para corregir los errores.</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="modal-body">
+                <ul class="nav nav-tabs nav-fill mb-3" data-bs-toggle="tabs">
+                    <li class="nav-item">
+                        <a href="#tabs-general" class="nav-link active {% if form.nombre_comercial.errors or form.tipo_persona.errors or form.razon_social.errors %}text-danger{% endif %}" data-bs-toggle="tab">
+                            General {% if form.nombre_comercial.errors or form.tipo_persona.errors or form.razon_social.errors %}●{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#tabs-fiscal" class="nav-link {% if form.nit.errors or form.nrc.errors or form.clasificacion.errors or form.giro.errors %}text-danger{% endif %}" data-bs-toggle="tab">
+                            Fiscal {% if form.nit.errors or form.nrc.errors or form.clasificacion.errors or form.giro.errors %}●{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#tabs-contacto" class="nav-link {% if form.contacto_nombre.errors or form.telefono.errors or form.dias_credito.errors or form.limite_credito.errors or form.direccion.errors %}text-danger{% endif %}" data-bs-toggle="tab">
+                            Contacto / Crédito {% if form.contacto_nombre.errors or form.telefono.errors or form.dias_credito.errors or form.limite_credito.errors or form.direccion.errors %}●{% endif %}
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane active show" id="tabs-general">
+                        <div class="row">
+                            <div class="col-lg-7 mb-3">
+                                <label class="form-label required">Nombre Comercial</label>
+                                {{ form.nombre_comercial }}
+                                {% if form.nombre_comercial.errors %}<div class="text-danger mt-1 small">{{ form.nombre_comercial.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-lg-5 mb-3">
+                                <label class="form-label">Tipo de Persona</label>
+                                {{ form.tipo_persona }}
+                                {% if form.tipo_persona.errors %}<div class="text-danger mt-1 small">{{ form.tipo_persona.errors.0 }}</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Razón Social (Nombre Legal)</label>
+                            {{ form.razon_social }}
+                            {% if form.razon_social.errors %}<div class="text-danger mt-1 small">{{ form.razon_social.errors.0 }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="tab-pane" id="tabs-fiscal">
+                        <div class="row">
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label required">NIT</label>
+                                {{ form.nit }}
+                                {% if form.nit.errors %}<div class="text-danger mt-1 small">{{ form.nit.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">NRC (Registro de IVA)</label>
+                                {{ form.nrc }}
+                                {% if form.nrc.errors %}<div class="text-danger mt-1 small">{{ form.nrc.errors.0 }}</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">Clasificación</label>
+                                {{ form.clasificacion }}
+                                {% if form.clasificacion.errors %}<div class="text-danger mt-1 small">{{ form.clasificacion.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">Giro / Actividad</label>
+                                {{ form.giro }}
+                                {% if form.giro.errors %}<div class="text-danger mt-1 small">{{ form.giro.errors.0 }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane" id="tabs-contacto">
+                        <div class="row">
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">Persona de Contacto</label>
+                                {{ form.contacto_nombre }}
+                                {% if form.contacto_nombre.errors %}<div class="text-danger mt-1 small">{{ form.contacto_nombre.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label required">Teléfono</label>
+                                {{ form.telefono }}
+                                {% if form.telefono.errors %}<div class="text-danger mt-1 small">{{ form.telefono.errors.0 }}</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">Días de Crédito</label>
+                                {{ form.dias_credito }}
+                                {% if form.dias_credito.errors %}<div class="text-danger mt-1 small">{{ form.dias_credito.errors.0 }}</div>{% endif %}
+                            </div>
+                            <div class="col-lg-6 mb-3">
+                                <label class="form-label">Límite de Crédito ($)</label>
+                                {{ form.limite_credito }}
+                                {% if form.limite_credito.errors %}<div class="text-danger mt-1 small">{{ form.limite_credito.errors.0 }}</div>{% endif %}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Dirección</label>
+                            {{ form.direccion }}
+                            {% if form.direccion.errors %}<div class="text-danger mt-1 small">{{ form.direccion.errors.0 }}</div>{% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-check form-switch">
+                                {{ form.activo }}
+                                <span class="form-check-label">Proveedor Activo</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary ms-auto">
+                    Guardar Proveedor
+                </button>
+            </div>
+        </form>
     </div>
-
-    <form hx-post="{{ request.path }}" 
-      hx-target="#dialog" 
-      novalidate autocomplete="off">
-        {% csrf_token %}
-        
-        {% if form.errors %}
-        <div class="alert alert-danger m-3" role="alert">
-            <div class="d-flex">
-                <div>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
-                </div>
-                <div>
-                    <h4 class="alert-title">Verifica los campos obligatorios</h4>
-                    <div class="text-secondary">Revisa las pestañas para corregir los errores.</div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="modal-body">
-            <ul class="nav nav-tabs nav-fill mb-3" data-bs-toggle="tabs">
-                <li class="nav-item">
-                    <a href="#tabs-general" class="nav-link active" data-bs-toggle="tab">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" /><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /></svg>
-                        General
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#tabs-fiscal" class="nav-link" data-bs-toggle="tab">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 21h18" /><path d="M9 8h1" /><path d="M9 12h1" /><path d="M9 16h1" /><path d="M14 8h1" /><path d="M14 12h1" /><path d="M14 16h1" /><path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16" /></svg>
-                        Fiscal
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#tabs-contacto" class="nav-link" data-bs-toggle="tab">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2" /></svg>
-                        Contacto / Crédito
-                    </a>
-                </li>
-            </ul>
-
-            <div class="tab-content">
-                <div class="tab-pane active show" id="tabs-general">
-                    <div class="row">
-                        <div class="col-lg-7 mb-3">
-                            <label class="form-label required">Nombre Comercial</label>
-                            {{ form.nombre_comercial }}
-                            {% if form.nombre_comercial.errors %}<div class="text-danger mt-1"><small>{{ form.nombre_comercial.errors.0 }}</small></div>{% endif %}
-                        </div>
-                        <div class="col-lg-5 mb-3">
-                            <label class="form-label">Tipo de Persona</label>
-                            {{ form.tipo_persona }}
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Razón Social (Nombre Legal)</label>
-                        {{ form.razon_social }}
-                    </div>
-                </div>
-
-                <div class="tab-pane" id="tabs-fiscal">
-                    <div class="row">
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label required">NIT</label>
-                            {{ form.nit }}
-                            <small class="form-hint">0000-000000-000-0</small>
-                            {% if form.nit.errors %}<div class="text-danger mt-1"><small>{{ form.nit.errors.0 }}</small></div>{% endif %}
-                        </div>
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">NRC (Registro de IVA)</label>
-                            {{ form.nrc }}
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">Clasificación</label>
-                            {{ form.clasificacion }}
-                        </div>
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">Giro / Actividad</label>
-                            {{ form.giro }}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-pane" id="tabs-contacto">
-                    <div class="row">
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">Persona de Contacto</label>
-                            {{ form.contacto_nombre }}
-                        </div>
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label required">Teléfono</label>
-                            {{ form.telefono }}
-                            {% if form.telefono.errors %}<div class="text-danger mt-1"><small>{{ form.telefono.errors.0 }}</small></div>{% endif %}
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">Días de Crédito</label>
-                            {{ form.dias_credito }}
-                        </div>
-                        <div class="col-lg-6 mb-3">
-                            <label class="form-label">Límite de Crédito ($)</label>
-                            {{ form.limite_credito }}
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Dirección</label>
-                        {{ form.direccion }}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal-footer ">
-            <button type="button" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary ms-auto">
-                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" /><path d="M12 14m-2 0a2 2 0 0 1 2 -2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2a2 2 0 0 1 -2 -2" /><path d="M14 4l0 4l-4 0l0 -4" /></svg>
-                Guardar Proveedor
-            </button>
-        </div>
-    </form>
+  </div>
 </div>
