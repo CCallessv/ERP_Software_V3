@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from typing import Any, Dict
 from django.contrib import messages
@@ -17,6 +18,9 @@ from .models import Producto, Venta
 from .decorators import rol_requerido
 from itertools import chain
 from operator import attrgetter
+from datetime import timedelta
+from django.db.models.functions import TruncDate
+from collections import defaultdict
 
 from .forms import (
     ProductoForm,
@@ -44,7 +48,6 @@ from .models import (
 
 @login_required
 def home(request):
-    # 1. Obtenemos el mes y año actual
     hoy = timezone.now()
     mes_actual = hoy.month
     anio_actual = hoy.year
@@ -64,19 +67,14 @@ def home(request):
     total_ventas = ventas_mes.aggregate(total=Sum('total_pagar'))['total'] or 0
     cantidad_ventas = ventas_mes.count()
 
-    # --- NUEVO: 3.5 Compras del Período ---
-    # Asumo que en tu modelo Compra la fecha se llama 'fecha_emision' 
-    # y el total se llama 'total' (basado en el código que me pasaste antes).
-    # --- NUEVO: 3.5 Compras del Período ---
+    # 3.5 Compras del Período
     compras_mes = Compra.objects.filter(
-        fecha_compra__month=mes_actual,  # <-- CAMBIO AQUÍ
-        fecha_compra__year=anio_actual,  # <-- CAMBIO AQUÍ
+        fecha_compra__month=mes_actual,
+        fecha_compra__year=anio_actual,
         estado='completada'
     )
     total_compras = compras_mes.aggregate(total_suma=Sum('total'))['total_suma'] or 0
     cantidad_compras = compras_mes.count()
-    # --------------------------------------
-    # --------------------------------------
 
     # 4. Alertas de Stock Bajo
     stock_bajo = Producto.objects.filter(stock__lte=5).count()
@@ -84,14 +82,68 @@ def home(request):
     # 5. Últimas Transacciones (Ventas)
     ultimas_ventas = Venta.objects.filter(estado='sellada').order_by('-fecha_hora_emision')[:5]
 
-    context: Dict[str, Any] = {
+    # =========================================================
+    # NUEVO: 6. TENDENCIA DE 30 DÍAS (Agrupado en Python para evitar bugs de SQLite)
+    # =========================================================
+    fecha_inicio_tendencia = hoy - timedelta(days=30)
+
+    # 6.1 Traemos las ventas de los últimos 30 días
+    ventas = Venta.objects.filter(
+        fecha_hora_emision__gte=fecha_inicio_tendencia,
+        estado='sellada'
+    )
+    
+    # Sumamos las ventas por día usando Python
+    dict_ventas = defaultdict(float)
+    for v in ventas:
+        if v.fecha_hora_emision:
+            # Extraemos solo "YYYY-MM-DD"
+            dia_str = v.fecha_hora_emision.strftime('%Y-%m-%d')
+            dict_ventas[dia_str] += float(v.total_pagar)
+
+    # 6.2 Traemos las compras de los últimos 30 días
+    compras = Compra.objects.filter(
+        fecha_compra__gte=fecha_inicio_tendencia,
+        estado='completada'
+    )
+    
+    # Sumamos las compras por día usando Python
+    dict_compras = defaultdict(float)
+    for c in compras:
+        if c.fecha_compra:
+            dia_str = c.fecha_compra.strftime('%Y-%m-%d')
+            dict_compras[dia_str] += float(c.total)
+
+    # 6.3 Construimos el arreglo perfecto de 30 días
+    meses_es = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    
+    chart_labels = []
+    chart_ventas = []
+    chart_compras = []
+
+    for i in range(30, -1, -1):
+        dia = hoy - timedelta(days=i)
+        dia_iso = dia.strftime('%Y-%m-%d')          
+        dia_display = f"{dia.day} {meses_es[dia.month]}" 
+
+        chart_labels.append(dia_display)
+        # Si el día está en el diccionario, ponemos el total, si no, 0.0
+        chart_ventas.append(dict_ventas.get(dia_iso, 0.0))
+        chart_compras.append(dict_compras.get(dia_iso, 0.0))
+
+    context = {
         'valor_inventario': valor_inventario,
         'total_ventas': total_ventas,
         'cantidad_ventas': cantidad_ventas,
-        'total_compras': total_compras,       # Inyectamos el total de compras
-        'cantidad_compras': cantidad_compras, # Inyectamos la cantidad de ordenes
+        'total_compras': total_compras,
+        'cantidad_compras': cantidad_compras,
         'stock_bajo': stock_bajo,
         'ultimas_ventas': ultimas_ventas,
+        
+        # NUEVO: Pasamos las listas al HTML convertidas en JSON
+        'chart_labels': json.dumps(chart_labels),
+        'chart_ventas': json.dumps(chart_ventas),
+        'chart_compras': json.dumps(chart_compras),
     }
     
     return render(request, 'core/home.html', context)

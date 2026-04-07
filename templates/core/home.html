@@ -120,10 +120,39 @@
           </div>
         </div>
       </div> 
+
+      
+</div>
+
+<div class="row row-cards mt-3">
+  <div class="col-12">
+      <div class="card">
+          <div class="card-header">
+              <h3 class="card-title">Tendencia de Ingresos vs Egresos (Últimos 30 días)</h3>
+          </div>
+          <div class="card-body table-responsive">
+              <div style="position: relative; height: 350px; min-width: 800px; width: 100%;">
+                  <canvas id="tendenciaChart"></canvas>
+              </div>
+          </div>
+      </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="{% static 'js/DonutChart.js' %}"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    window.tendenciaData = {
+        labels: {{ chart_labels|safe|default:"[]" }},
+        ventas: {{ chart_ventas|safe|default:"[]" }},
+        compras: {{ chart_compras|safe|default:"[]" }}
+    };
+  </script>
+
+  <script src="{% static 'js/TendenciaChart.js' %}"></script>
 {% endblock %}
