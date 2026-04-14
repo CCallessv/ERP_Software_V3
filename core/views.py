@@ -76,43 +76,49 @@ def home(request):
     total_compras = compras_mes.aggregate(total_suma=Sum('total'))['total_suma'] or 0
     cantidad_compras = compras_mes.count()
 
-    # 4. Alertas de Stock Bajo
-    stock_bajo = Producto.objects.filter(stock__lte=5).count()
+   # 4. Alertas de Stock Bajo (Dinámico)
+    # Buscamos productos activos donde el stock sea menor o igual a SU PROPIO stock mínimo
+    alertas_query = Producto.objects.filter(activo=True, stock__lte=F('stock_minimo'))
+    
+    # Contamos el total para la tarjeta de arriba
+    stock_bajo = alertas_query.count()
+    
+    # Sacamos solo los primeros 5 para la lista (para no saturar la pantalla)
+    productos_alerta = alertas_query.order_by('stock')[:5]
 
-    # 5. Últimas Transacciones (Ventas)
-    ultimas_ventas = Venta.objects.filter(estado='sellada').order_by('-fecha_hora_emision')[:5]
+    # 5. Últimas Transacciones (Optimizadas con JOIN)
+    ultimas_ventas = Venta.objects.filter(
+        estado='sellada'
+    ).select_related('cliente').order_by('-fecha_hora_emision')[:5]
 
     # =========================================================
-    # NUEVO: 6. TENDENCIA DE 30 DÍAS (Agrupado en Python para evitar bugs de SQLite)
+    # 6. TENDENCIA DE 30 DÍAS (Optimizado en Memoria)
     # =========================================================
     fecha_inicio_tendencia = hoy - timedelta(days=30)
 
-    # 6.1 Traemos las ventas de los últimos 30 días
+    # 6.1 Traemos SOLO las dos columnas que necesitamos (Ahorro masivo de RAM)
     ventas = Venta.objects.filter(
         fecha_hora_emision__gte=fecha_inicio_tendencia,
         estado='sellada'
-    )
+    ).values('fecha_hora_emision', 'total_pagar')
     
-    # Sumamos las ventas por día usando Python
     dict_ventas = defaultdict(float)
     for v in ventas:
-        if v.fecha_hora_emision:
-            # Extraemos solo "YYYY-MM-DD"
-            dia_str = v.fecha_hora_emision.strftime('%Y-%m-%d')
-            dict_ventas[dia_str] += float(v.total_pagar)
+        if v['fecha_hora_emision']:
+            dia_str = v['fecha_hora_emision'].strftime('%Y-%m-%d')
+            dict_ventas[dia_str] += float(v['total_pagar'])
 
-    # 6.2 Traemos las compras de los últimos 30 días
+    # 6.2 Lo mismo para compras
     compras = Compra.objects.filter(
         fecha_compra__gte=fecha_inicio_tendencia,
         estado='completada'
-    )
+    ).values('fecha_compra', 'total')
     
-    # Sumamos las compras por día usando Python
     dict_compras = defaultdict(float)
     for c in compras:
-        if c.fecha_compra:
-            dia_str = c.fecha_compra.strftime('%Y-%m-%d')
-            dict_compras[dia_str] += float(c.total)
+        if c['fecha_compra']:
+            dia_str = c['fecha_compra'].strftime('%Y-%m-%d')
+            dict_compras[dia_str] += float(c['total'])
 
     # 6.3 Construimos el arreglo perfecto de 30 días
     meses_es = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -127,7 +133,6 @@ def home(request):
         dia_display = f"{dia.day} {meses_es[dia.month]}" 
 
         chart_labels.append(dia_display)
-        # Si el día está en el diccionario, ponemos el total, si no, 0.0
         chart_ventas.append(dict_ventas.get(dia_iso, 0.0))
         chart_compras.append(dict_compras.get(dia_iso, 0.0))
 
@@ -138,9 +143,8 @@ def home(request):
         'total_compras': total_compras,
         'cantidad_compras': cantidad_compras,
         'stock_bajo': stock_bajo,
+        'productos_alerta': productos_alerta,
         'ultimas_ventas': ultimas_ventas,
-        
-        # NUEVO: Pasamos las listas al HTML convertidas en JSON
         'chart_labels': json.dumps(chart_labels),
         'chart_ventas': json.dumps(chart_ventas),
         'chart_compras': json.dumps(chart_compras),
