@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<form action="{% url 'recepcion_detalle' compra.id_publico %}" id="recepcion-form" method="post">
+    {% csrf_token %}
+
+    <div class="page-header d-print-none">
+        <div class="container-xl">
+            <div class="row g-2 align-items-center">
+                <div class="col">
+                    <h2 class="page-title">Guía de Ingreso a Bodega</h2>
+                    <div class="text-secondary mt-1">Doc: {{ compra.numero_comprobante }} | Proveedor: {{ compra.proveedor.nombre_comercial }}</div>
+                </div>
+                <div class="col-auto ms-auto d-print-none">
+                    <a href="{% url 'recepciones_list' %}" class="btn btn-secondary">Volver al listado</a>
+                    
+                    {% if compra.estado in 'en_transito,parcial' %}
+                        <button type="submit" form="recepcion-form" class="btn btn-success">Confirmar Ingreso Físico</button>
+                    {% else %}
+                    <span class="badge bg-green text-green-fg fs-4 py-2 px-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-1" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10" /></svg>
+                        Recepción Completada
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-body">
+        <div class="container-xl">
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-vcenter card-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-center">Facturado</th>
+                                <th class="text-center">Ya Recibido</th>
+                                <th class="text-center">Pendiente</th>
+                                <th class="text-center" style="width: 150px;">Nueva Entrega</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in detalles %}
+                            <tr>
+                                <td>{{ item.producto.nombre }}</td>
+                                <td class="text-center">{{ item.cantidad|floatformat:0 }}</td>
+                                <td class="text-center text-success">{{ item.ya_recibido|floatformat:0 }}</td>
+                                <td class="text-center text-danger font-weight-bold">{{ item.pendiente|floatformat:0 }}</td>
+                                <td>
+                                    {% if item.pendiente > 0 %}
+                                        <input type="number" 
+                                               name="cantidad_nueva_{{ item.id }}" 
+                                               value="{{ item.pendiente|floatformat:0 }}" 
+                                               class="form-control form-control-sm text-center border-primary" 
+                                               max="{{ item.pendiente }}" min="0">
+                                    {% else %}
+                                    <span class="badge bg-green-lt w-100 py-2 fs-5">Completo</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</form>
+{% endblock %}

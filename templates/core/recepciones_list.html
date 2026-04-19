@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Recepciones de Bodega - ERP{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">
+                    Recepción de Mercadería
+                </h2>
+                <div class="text-secondary mt-1">Guías de entrada y validación física de inventario.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Documento</th>
+                            <th>Proveedor</th>
+                            <th>Estado Logístico</th>
+                            <th class="w-1">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for compra in compras %}
+                        <tr>
+                            <td>{{ compra.fecha_compra|date:"d b Y" }}</td>
+                            <td>
+                                <div class="font-weight-medium">Doc: {{ compra.numero_comprobante }}</div>
+                                <div class="text-secondary small">{{ compra.get_tipo_comprobante_display }}</div>
+                            </td>
+                            <td>{{ compra.proveedor.nombre_comercial }}</td>
+                            <td>
+                                {% if compra.estado == 'en_transito' %}
+                                    <span class="badge bg-yellow text-yellow-fg">En Tránsito (Pendiente)</span>
+                                {% elif compra.estado == 'recibida' %}
+                                    <span class="badge bg-green text-green-fg">Ingresado al Kardex</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'recepcion_detalle' compra.id_publico %}" class="btn btn-sm {% if compra.estado == 'en_transito' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                    {% if compra.estado == 'en_transito' %}
+                                        Validar Ingreso
+                                    {% else %}
+                                        Ver Guía
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-secondary">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-package mb-2" width="40" height="40" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" /><path d="M12 12l8 -4.5" /><path d="M12 12l0 9" /><path d="M12 12l-8 -4.5" /><path d="M16 5.25l-8 4.5" /></svg>
+                                <br>
+                                No hay camiones en tránsito ni recepciones pendientes.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

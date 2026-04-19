@@ -11,7 +11,12 @@
     
     <div class="card mb-3">
         <div class="card-header">
-            <h3 class="card-title">Documento en Borrador: {{ compra.numero_comprobante }}</h3>
+            <h3 class="card-title">Documento: {{ compra.numero_comprobante }}</h3>
+            {% if compra.estado == 'en_transito' %}
+                <span class="badge bg-warning ms-auto">En Tránsito</span>
+            {% elif compra.estado == 'recibida' %}
+                <span class="badge bg-success ms-auto">Recibida en Bodega</span>
+            {% endif %}
         </div>
         <div class="card-body">
             <div class="row">
@@ -46,7 +51,7 @@
                         {{ form.producto }}
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label required">Cantidad (Libras/Unidades)</label>
+                        <label class="form-label required">Cantidad</label>
                         {{ form.cantidad }}
                     </div>
                     <div class="col-md-3">
@@ -54,18 +59,50 @@
                         {{ form.precio_unitario }}
                     </div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
-                            Agregar
-                        </button>
+                        <button type="submit" class="btn btn-primary w-100">Agregar</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
-    {% else %}
+
+    {% elif compra.estado == 'recibida' and not compra.tiene_discrepancias %}
     <div class="alert alert-success mt-3">
-        Factura procesada. Documento sellado contablemente.
+        Inventario recibido completo. Documento sellado contablemente.
+    </div>
+    {% endif %}
+
+    {% if compra.estado == 'parcial' %}
+    <div class="card border-danger mt-3 mb-3">
+        <div class="card-status-top bg-danger"></div>
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h4 class="card-title text-danger">Módulo de Auditoría: Discrepancia Detectada</h4>
+                    <p class="text-secondary">Se facturaron unidades que no ingresaron físicamente. <strong>Acción requerida para cierre contable.</strong></p>
+                </div>
+            </div>
+
+            <form action="{% url 'compra_resolver_discrepancia' compra.id_publico %}" method="POST" class="mt-2">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label font-weight-bold">Justificación de la Resolución</label>
+                        <textarea name="observaciones" class="form-control" rows="2" placeholder="Ej: El proveedor enviará el faltante el lunes / Se aplicará nota de crédito..." required></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="submit" name="accion" value="esperar" class="btn btn-outline-warning w-100">
+                            Mantener como Pendiente (Esperar Remanente)
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="submit" name="accion" value="ajustar" class="btn btn-danger w-100">
+                            Cerrar con Nota de Crédito (Ajustar Saldo)
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
     {% endif %}
 
@@ -75,7 +112,8 @@
                 <thead>
                     <tr>
                         <th>Producto</th>
-                        <th>Cantidad</th>
+                        <th>Cant. Facturada</th>
+                        <th>Cant. Recibida</th>
                         <th>Costo Unit.</th>
                         <th>Subtotal</th>
                         <th class="w-1">Acción</th>
@@ -85,7 +123,16 @@
                     {% for detalle in detalles %}
                     <tr>
                         <td>{{ detalle.producto.nombre }}</td>
-                        <td class="text-secondary">{{ detalle.cantidad }}</td>
+                        <td class="text-secondary">{{ detalle.cantidad|floatformat:0 }}</td>
+                        <td>
+                            {% if compra.estado == 'borrador' or compra.estado == 'en_transito' %}
+                                <span class="text-muted">-</span>
+                            {% else %}
+                                <span class="{% if detalle.cantidad != detalle.cantidad_recibida %}text-danger font-weight-bold{% else %}text-success{% endif %}">
+                                    {{ detalle.cantidad_recibida|floatformat:0 }}
+                                </span>
+                            {% endif %}
+                        </td>
                         <td class="text-secondary">${{ detalle.precio_unitario|floatformat:2 }}</td>
                         <td class="font-weight-bold">${{ detalle.subtotal|floatformat:2 }}</td>
                         <td>
@@ -99,16 +146,12 @@
                                 Quitar
                             </button>
                             {% else %}
-                            <span class="badge bg-secondary">Sellado</span>
+                            <span class="badge bg-secondary">Bloqueado</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center text-secondary py-4">
-                            Factura vacía. Agrega los productos arriba.
-                        </td>
-                    </tr>
+                    <tr><td colspan="6" class="text-center py-4">Factura vacía.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -119,7 +162,7 @@
             <form action="{% url 'compra_confirmar' compra.id_publico %}" method="POST">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-success" {% if not detalles %}disabled{% endif %}>
-                    Confirmar e Ingresar al Kardex
+                    Enviar a Recepción de Bodega
                 </button>
             </form>
             {% endif %}

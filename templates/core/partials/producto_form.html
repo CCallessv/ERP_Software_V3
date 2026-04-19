@@ -1,107 +1,123 @@
-<div class="modal-content">
-  <div class="modal-header">
-      <h5 class="modal-title">{{ titulo_modal|default:"Nuevo Producto" }}</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-  </div>
-  
-  <form hx-post="{% url 'crear_producto' %}" hx-target="#dialog" autocomplete="off" enctype="multipart/form-data">
-      {% csrf_token %}
-      
-      <div class="modal-body">
-          <div class="row">
-              <div class="col-md-8 mb-3">
-                  <label class="form-label required">Nombre del Producto</label>
-                  {{ form.nombre }}
-                  {% if form.nombre.errors %}
-                      <div class="text-danger small mt-1 fw-bold">{{ form.nombre.errors.0 }}</div>
-                  {% endif %}
-              </div>
-              <div class="col-md-4 mb-3">
-                  <label class="form-label required">Categoría</label>
-                  {{ form.categoria }}
-                  {% if form.categoria.errors %}
-                      <div class="text-danger small mt-1 fw-bold">{{ form.categoria.errors.0 }}</div>
-                  {% endif %}
-              </div>
-          </div>
+<div class="modal modal-blur" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ titulo_modal|default:"Nuevo Producto" }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <form hx-post="{% url 'crear_producto' %}" hx-target="#modal-container" autocomplete="off" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label required">Nombre del Producto</label>
+                            {{ form.nombre }}
+                            {% if form.nombre.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.nombre.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Categoría</label>
+                            {{ form.categoria }}
+                            {% if form.categoria.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.categoria.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
 
-          <div class="row">
-              <div class="col-md-4 mb-3">
-                  <label class="form-label required">Unidad Base</label>
-                  {{ form.unidad_medida_base }}
-              </div>
-              <div class="col-md-4 mb-3">
-                  <label class="form-label">Ubicación</label>
-                  {{ form.ubicacion }}
-              </div>
-              <div class="col-md-4 mb-3">
-                  <label class="form-label required">Stock Inicial</label>
-                  {{ form.stock }}
-              </div>
-          </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Unidad Base</label>
+                            {{ form.unidad_medida_base }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Ubicación</label>
+                            {{ form.ubicacion }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Stock Inicial</label>
+                            {{ form.stock }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Stock Mínimo (Alerta)</label>
+                            {{ form.stock_minimo }}
+                            {% if form.stock_minimo.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.stock_minimo.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Stock Máximo</label>
+                            {{ form.stock_maximo }}
+                            {% if form.stock_maximo.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.stock_maximo.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
 
-          <div class="row">
-              <div class="col-md-6 mb-3">
-                  <label class="form-label">Stock Mínimo (Alerta)</label>
-                  {{ form.stock_minimo }}
-              </div>
-              <div class="col-md-6 mb-3">
-                  <label class="form-label">Stock Máximo</label>
-                  {{ form.stock_maximo }}
-              </div>
-          </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Costo Promedio</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                {{ form.precio_costo }}
+                            </div>
+                            {% if form.precio_costo.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.precio_costo.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Precio de Venta Base</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                {{ form.precio_venta }}
+                            </div>
+                            {% if form.precio_venta.errors %}
+                                <div class="text-danger small mt-1 fw-bold">{{ form.precio_venta.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
 
-          <div class="row">
-              <div class="col-md-6 mb-3">
-                  <label class="form-label">Costo Promedio</label>
-                  <div class="input-group">
-                      <span class="input-group-text">$</span>
-                      {{ form.precio_costo }}
-                  </div>
-              </div>
-              <div class="col-md-6 mb-3">
-                  <label class="form-label">Precio de Venta Base</label>
-                  <div class="input-group">
-                      <span class="input-group-text">$</span>
-                      {{ form.precio_venta }}
-                  </div>
-              </div>
-          </div>
+                    <div class="row">
+                         <div class="col-12 mb-3">
+                            <label class="form-label">Imagen del Producto</label>
+                            {{ form.imagen }}
+                        </div>
+                    </div>
 
-          <div class="row">
-               <div class="col-12 mb-3">
-                  <label class="form-label">Imagen del Producto</label>
-                  {{ form.imagen }}
-              </div>
-          </div>
+                    <div class="row mt-2 p-3 rounded border">
+                        <div class="col-md-4">
+                            <label class="form-check form-switch">
+                                {{ form.es_vendible }}
+                                <span class="form-check-label">Se vende al cliente</span>
+                            </label>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-check form-switch">
+                                {{ form.es_comprable }}
+                                <span class="form-check-label">Se compra a proveedor</span>
+                            </label>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-check form-switch">
+                                {{ form.activo }}
+                                <span class="form-check-label">Activo en Sistema</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
 
-          <div class="row mt-2 p-3 rounded border">
-              <div class="col-md-4">
-                  <label class="form-check form-switch">
-                      {{ form.es_vendible }}
-                      <span class="form-check-label">Se vende al cliente</span>
-                  </label>
-              </div>
-              <div class="col-md-4">
-                  <label class="form-check form-switch">
-                      {{ form.es_comprable }}
-                      <span class="form-check-label">Se compra a proveedor</span>
-                  </label>
-              </div>
-              <div class="col-md-4">
-                  <label class="form-check form-switch">
-                      {{ form.activo }}
-                      <span class="form-check-label">Activo en Sistema</span>
-                  </label>
-              </div>
-          </div>
-      </div>
-
-      <div class="modal-footer">
-          <a href="#" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</a>
-          <button type="submit" class="btn btn-primary ms-auto">
-              Guardar Producto
-          </button>
-      </div>
-  </form>
+                <div class="modal-footer">
+                    <a href="#" class="btn btn-link link-secondary" data-bs-dismiss="modal">Cancelar</a>
+                    <button type="submit" class="btn btn-primary ms-auto">
+                        Guardar Producto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>

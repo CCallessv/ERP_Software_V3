@@ -2,6 +2,24 @@
 {% load static %}
 
 {% block content %}
+
+<style>
+  body, html {
+      overflow-x: hidden !important;
+      max-width: 100vw;
+  }
+  .page-wrapper {
+      min-width: 0 !important;
+      max-width: 100%;
+      overflow: hidden;
+  }
+  .chart-container-strict {
+      position: relative;
+      height: 350px;
+      width: 100%;
+      max-width: 100%;
+  }
+</style>
 <div class="page-header d-print-none">
   <div class="container-xl">
     <div class="row g-2 align-items-center">
@@ -13,9 +31,8 @@
         <div class="btn-list">
           <button class="btn btn-primary d-none d-sm-inline-block" 
                   hx-get="{% url 'crear_producto' %}" 
-                  hx-target="#dialog" 
-                  data-bs-toggle="modal" 
-                  data-bs-target="#modal-generic">
+                  hx-target="#modal-container" 
+                  hx-swap="innerHTML">
               <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               Nuevo Producto
           </button>
@@ -64,7 +81,7 @@
                 </div>
             </div>
         </div>
-
+        {% if request.user.is_staff %}
         <div class="col-sm-6 col-lg-4"> 
             <div class="card card-sm">
                 <div class="card-body">
@@ -82,6 +99,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div> <div class="card">
       <div class="card-body border-bottom py-3">
         <div class="d-flex">
@@ -103,7 +121,9 @@
               <th>CATEGORÍA</th>
               <th>STOCK</th>
               <th>MÍN/MÁX</th>
-              <th>COSTO PROM.</th>
+              {% if request.user.is_staff %}
+            <th>COSTO PROM.</th>
+              {% endif %}
               <th>ESTADO</th>
               <th class="w-1 text-center">ACCIONES</th>
             </tr>
@@ -112,13 +132,18 @@
                  hx-get="{% url 'productos_list' %}" 
                  hx-trigger="productoActualizado from:body">
              {% include 'core/partials/producto_table_rows.html' %}
+             <tr>
+              {% if request.user.is_staff %}
+                  <td>{{ producto.costo_promedio }}</td>
+              {% endif %}
+              </tr>
           </tbody>
         </table>
       </div>
-    </div> </div> </div> <div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog">
-    </div>
-</div>
+    </div> 
+  </div> 
+</div> 
+<div id="modal-container"></div>
 
 <script src="{% static 'js/dropdown_AccionesProductos.js' %}"></script>
 {% endblock %}

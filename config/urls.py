@@ -20,12 +20,13 @@ from django.contrib.auth import views as auth_views
 from core.views import home, exit, clientes_list, crear_cliente, editar_cliente, eliminar_cliente, productos_list,crear_producto,editar_producto,eliminar_producto
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
-from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle
+from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle,solicitar_acceso
+from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
     # Ruta de Login (Usando la plantilla personalizada)
-    path('login/', auth_views.LoginView.as_view(template_name='core/login.html'), name='login'),
+    path('login/', CustomLoginView.as_view(), name='login'),
     path('logout/', exit, name='logout'),
     #ruta clientes
     path('clientes/', clientes_list, name='clientes_list'),
@@ -84,7 +85,10 @@ urlpatterns = [
     # Módulo de Inventario / Kardex
     path('inventario/kardex/', kardex_list, name='kardex_list'),
     path('inventario/kardex/<int:producto_id>/', kardex_detalle, name='kardex_detalle'),
+    path('solicitar-acceso/', solicitar_acceso, name='solicitar_acceso'),
+    path('inventario/recepciones/', recepciones_list, name='recepciones_list'),
+    path('inventario/recepciones/<uuid:id_publico>/', recepcion_detalle, name='recepcion_detalle'),
     
-   
+   path('compras/resolver/<uuid:id_publico>/', compra_resolver_discrepancia, name='compra_resolver_discrepancia'),
 ]
 

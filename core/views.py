@@ -21,6 +21,10 @@ from operator import attrgetter
 from datetime import timedelta
 from django.db.models.functions import TruncDate
 from collections import defaultdict
+from django.contrib.auth.decorators import user_passes_test
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.views import LoginView
+from django.urls import reverse_lazy
 
 from .forms import (
     ProductoForm,
@@ -31,6 +35,7 @@ from .forms import (
     CompraForm,
     DetalleCompraForm,
     AjusteInventarioForm,
+    SolicitudAccesoForm
     
 )
 from .models import (
@@ -46,7 +51,24 @@ from .models import (
     AjusteInventario,
 )
 
+def es_administrador(user):
+    if user.is_staff:
+        return True
+    raise PermissionDenied # Esto lanza el famoso Error 403 (Prohibido)
+
+class CustomLoginView(LoginView):
+    template_name = 'core/login.html' 
+
+    def get_success_url(self):
+        # Aquí interceptamos a dónde va el usuario DESPUÉS de poner bien su clave
+        if self.request.user.is_staff:
+            return reverse_lazy('home') # El administrador/gerente va al Dashboard
+        
+        # Si no es staff (es bodeguero u operativo), va directo a productos
+        return reverse_lazy('productos_list')
+
 @login_required
+@user_passes_test(es_administrador)
 def home(request):
     hoy = timezone.now()
     mes_actual = hoy.month
@@ -152,11 +174,74 @@ def home(request):
     
     return render(request, 'core/home.html', context)
 
+@login_required
+def recepciones_list(request):
+    # El bodeguero solo ve lo que viene en camino o lo que ya recibió
+    compras_entrantes = Compra.objects.filter(estado__in=['en_transito', 'parcial', 'recibida', 'ajustada']).order_by('-fecha_compra', '-id')
+    return render(request, 'core/recepciones_list.html', {'compras': compras_entrantes})
 
+
+@login_required
+def recepcion_detalle(request, id_publico):
+    # 1. CORRECCIÓN: Agregamos 'recibida' a la lista para evitar el 404 al ver el historial
+    compra = get_object_or_404(Compra, id_publico=id_publico, estado__in=['en_transito', 'parcial', 'recibida'])
+    detalles = compra.detalles.all()
+    
+    # Calculamos lo que falta
+    for d in detalles:
+        d.ya_recibido = d.cantidad_recibida if d.cantidad_recibida else 0
+        d.pendiente = d.cantidad - d.ya_recibido
+
+    # 2. SEGURIDAD: Solo procesamos el formulario si la compra AÚN admite mercadería
+    if request.method == 'POST' and compra.estado in ['en_transito', 'parcial']:
+        try:
+            with transaction.atomic():
+                hay_faltante_todavia = False
+                
+                for detalle in detalles:
+                    campo_name = f"cantidad_nueva_{detalle.id}"
+                    nueva_entrega_str = request.POST.get(campo_name)
+                    
+                    if nueva_entrega_str:
+                        nueva_entrega = Decimal(nueva_entrega_str)
+                        
+                        if nueva_entrega > 0:
+                            producto = detalle.producto
+                            
+                            # Matemática de costos
+                            stock_total_futuro = producto.stock + nueva_entrega
+                            nuevo_costo = ((producto.stock * producto.precio_costo) + (nueva_entrega * detalle.precio_unitario)) / stock_total_futuro
+                            
+                            producto.precio_costo = nuevo_costo.quantize(Decimal('0.01'))
+                            producto.stock += nueva_entrega
+                            producto.save()
+                            
+                            # Acumulamos lo recibido
+                            if detalle.cantidad_recibida is None:
+                                detalle.cantidad_recibida = 0
+                            detalle.cantidad_recibida += nueva_entrega
+                            detalle.save()
+
+                    # Verificamos si aún queda saldo pendiente
+                    if detalle.cantidad_recibida < detalle.cantidad:
+                        hay_faltante_todavia = True
+
+                # Sellar o mantener abierta
+                compra.estado = 'parcial' if hay_faltante_todavia else 'recibida'
+                compra.save()
+                
+                messages.success(request, "Ingreso procesado. El stock y los costos se actualizaron.")
+                return redirect('recepciones_list')
+                
+        except Exception as e:
+            messages.error(request, f"Error: {e}")
+
+    return render(request, 'core/recepcion_detalle.html', {'compra': compra, 'detalles': detalles})
 def exit(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
 
+@user_passes_test(es_administrador)
 def clientes_list(request: HttpRequest) -> HttpResponse:
     search_query = request.GET.get('q', '')
     queryset = Cliente.objects.all().order_by('-id')
@@ -182,6 +267,7 @@ def clientes_list(request: HttpRequest) -> HttpResponse:
     }
     return render(request, 'core/clientes_list.html', context)
 
+@user_passes_test(es_administrador)
 def crear_cliente(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = ClienteForm(request.POST)
@@ -195,6 +281,7 @@ def crear_cliente(request: HttpRequest) -> HttpResponse:
     form = ClienteForm()
     return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': None})
 
+@user_passes_test(es_administrador)
 def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
     if request.method == 'POST':
@@ -209,6 +296,7 @@ def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     form = ClienteForm(instance=cliente)
     return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': cliente})
 
+@user_passes_test(es_administrador)
 def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
     
@@ -472,6 +560,7 @@ def gestionar_presentaciones(request: HttpRequest, pk: int) -> HttpResponse:
 
 #Modulo de COMPRAS
 @login_required
+@user_passes_test(es_administrador)
 def crear_compra(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = CompraForm(request.POST)
@@ -491,6 +580,7 @@ def crear_compra(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@user_passes_test(es_administrador)
 def compra_detalle(request: HttpRequest, id_publico) -> HttpResponse: 
     compra = get_object_or_404(Compra, id_publico=id_publico) 
     detalles = DetalleCompra.objects.filter(compra=compra)
@@ -504,6 +594,7 @@ def compra_detalle(request: HttpRequest, id_publico) -> HttpResponse:
 
 
 @login_required
+@user_passes_test(es_administrador)
 def detalle_compra_crear(request: HttpRequest, id_publico) -> HttpResponse: 
     compra = get_object_or_404(Compra, id_publico=id_publico)
     if request.method == 'POST':
@@ -534,6 +625,7 @@ def detalle_compra_crear(request: HttpRequest, id_publico) -> HttpResponse:
 
 
 @login_required
+@user_passes_test(es_administrador)
 def detalle_compra_eliminar(request: HttpRequest, detalle_id: int) -> HttpResponse:
     # Esta función borra el DETALLE, por eso mantiene el detalle_id (int)
     detalle = get_object_or_404(DetalleCompra, pk=detalle_id)
@@ -561,41 +653,38 @@ def detalle_compra_eliminar(request: HttpRequest, detalle_id: int) -> HttpRespon
 
 
 @login_required
+@user_passes_test(es_administrador)
 def compra_confirmar(request: HttpRequest, id_publico) -> HttpResponse:
     compra = get_object_or_404(Compra, id_publico=id_publico)
+    
     if request.method == 'POST':
+        # Validación 1: Que no se procese doble
         if compra.estado != 'borrador':
-            messages.error(request, "Esta factura ya fue ingresada al Kardex y está bloqueada.")
+            messages.error(request, "Esta factura ya fue procesada y no está en borrador.")
             return redirect('compra_detalle', id_publico=compra.id_publico)
+            
         detalles = DetalleCompra.objects.filter(compra=compra)
+        
+        # Validación 2: Que no vaya vacía
         if not detalles.exists():
             messages.error(request, "No puedes procesar una factura sin productos.")
             return redirect('compra_detalle', id_publico=compra.id_publico)
+            
         try:
-            with transaction.atomic():
-                for detalle in detalles:
-                    producto = detalle.producto
-                    stock_actual = producto.stock
-                    costo_actual = producto.precio_costo
-                    cantidad_nueva = detalle.cantidad
-                    precio_nuevo = detalle.precio_unitario
-                    stock_total_futuro = stock_actual + cantidad_nueva
-                    if stock_total_futuro > 0:
-                        nuevo_costo = ((stock_actual * costo_actual) + (cantidad_nueva * precio_nuevo)) / stock_total_futuro
-                        producto.precio_costo = Decimal(str(nuevo_costo)).quantize(Decimal('0.01'))
-                    else:
-                        producto.precio_costo = precio_nuevo
-                    producto.stock += cantidad_nueva
-                    producto.save()
-                compra.estado = 'completada'
-                compra.save()
-            messages.success(request, "Factura procesada. Inventario y costos actualizados correctamente.")
+            # EL CAMBIO CLAVE: Despachamos el camión hacia la bodega.
+            compra.estado = 'en_transito'
+            compra.save()
+            
+            messages.success(request, "Factura confirmada. Mercadería en camino a Recepción de Bodega.")
+            
         except Exception as e:
             messages.error(request, f"Error crítico de base de datos: {e}")
+            
     return redirect('compra_detalle', id_publico=compra.id_publico)
 
 
 @login_required
+@user_passes_test(es_administrador)
 def compra_list(request: HttpRequest) -> HttpResponse:
     compras = Compra.objects.select_related('proveedor').all()
     context = {
@@ -605,6 +694,7 @@ def compra_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@user_passes_test(es_administrador)
 def compra_eliminar(request: HttpRequest, id_publico) -> HttpResponse:
     compra = get_object_or_404(Compra, id_publico=id_publico)
     if request.method == 'POST':
@@ -616,12 +706,40 @@ def compra_eliminar(request: HttpRequest, id_publico) -> HttpResponse:
         messages.success(request, f"Borrador {numero} destruido permanentemente.")
     return redirect('compra_list')
 
-
+@login_required
+@user_passes_test(es_administrador)
+def compra_resolver_discrepancia(request, id_publico):
+    compra = get_object_or_404(Compra, id_publico=id_publico)
+    
+    if request.method == 'POST':
+        observaciones = request.POST.get('observaciones')
+        accion = request.POST.get('accion') # 'esperar' o 'ajustar'
+        
+        with transaction.atomic():
+            compra.observaciones = observaciones
+            
+            if accion == 'ajustar':
+                # RECALCULO FINANCIERO: Ajustar el total de la factura a lo recibido
+                nuevo_subtotal = sum(d.cantidad_recibida * d.precio_unitario for d in compra.detalles.all())
+                compra.subtotal = nuevo_subtotal
+                compra.impuestos = nuevo_subtotal * Decimal('0.13')
+                compra.total = compra.subtotal + compra.impuestos
+                compra.estado = 'ajustada' # Sella la factura
+                messages.success(request, f"Factura ajustada financieramente. Nuevo total: ${compra.total}")
+            
+            else:
+                # Se queda como parcial, permitiendo que bodega vuelva a recibir después
+                messages.warning(request, "Compra marcada como pendiente. Se espera el remanente de mercadería.")
+            
+            compra.save()
+            
+    return redirect('compra_detalle', id_publico=compra.id_publico)
 
 
 #MODULO DE VENTAS 
 
 @login_required
+@user_passes_test(es_administrador)
 def crear_venta_borrador(request):
     # 1. Recibir datos del Modal (Por POST)
     if request.method == 'POST':
@@ -646,7 +764,10 @@ def crear_venta_borrador(request):
 
     return redirect('venta_list')
 
+
+#VENTAS
 @login_required
+@user_passes_test(es_administrador)
 def venta_list(request):
     ventas = Venta.objects.all().order_by('-fecha_hora_emision')
     clientes = Cliente.objects.filter(estado=True).order_by('nombres')
@@ -662,6 +783,7 @@ def venta_list(request):
 
 
 @require_POST
+@user_passes_test(es_administrador)
 def venta_agregar_producto(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     
@@ -702,6 +824,7 @@ def venta_agregar_producto(request, codigo_generacion):
 
 
 @require_POST
+@user_passes_test(es_administrador)
 def venta_eliminar_producto(request, detalle_id: int):
     detalle = get_object_or_404(DetalleVenta, id=detalle_id)
     venta = detalle.venta
@@ -715,6 +838,7 @@ def venta_eliminar_producto(request, detalle_id: int):
     
     return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
 
+@user_passes_test(es_administrador)
 def venta_detalle(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     productos_disponibles = Producto.objects.filter(
@@ -730,6 +854,7 @@ def venta_detalle(request, codigo_generacion):
     return render(request, 'core/venta_detalle.html', context)
 
 @require_POST
+@user_passes_test(es_administrador)
 def venta_sellar(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
     
@@ -763,6 +888,7 @@ def venta_sellar(request, codigo_generacion):
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
+@user_passes_test(es_administrador)
 def generar_pdf_venta(request, codigo_generacion):
     # Traemos la venta y sus detalles
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
@@ -818,7 +944,7 @@ def crear_ajuste(request):
 
 
 @login_required
-@rol_requerido('Administrador') 
+@user_passes_test(es_administrador)
 def anular_venta(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
 
@@ -855,6 +981,7 @@ def anular_venta(request, codigo_generacion):
 
 
 @login_required
+@user_passes_test(es_administrador)
 def cuentas_por_cobrar_list(request):
     # Filtramos ventas que:
     # 1. Estén Selladas (ya son deuda real)
@@ -878,6 +1005,7 @@ def cuentas_por_cobrar_list(request):
 
 @login_required
 @require_POST
+@user_passes_test(es_administrador)
 def registrar_pago_factura(request, codigo_generacion):
     # BUSQUEDA SEGURA: Solo facturas selladas que aún deban dinero
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion, estado='sellada', estado_pago='pendiente')
@@ -941,15 +1069,19 @@ def kardex_detalle(request, producto_id):
         })
 
     for entrada in entradas_compra:
-        # Asumimos que tu modelo Compra tiene un campo fecha_compra
-        movimientos.append({
-            'fecha': entrada.compra.fecha_compra, 
-            'origen': 'Compra',
-            'documento': f"Doc. Prov: {entrada.compra.numero_comprobante}",
-            'entrada': entrada.cantidad,
-            'salida': 0,
-            'usuario': "Sistema (Compras)"
-        })
+        # Solo mostrar en Kardex las compras que YA pasaron por bodega
+        if entrada.compra.estado == 'recibida':
+            # Intentar usar la cantidad_recibida, si es None (no existe), usar la original
+            cantidad_real_ingresada = entrada.cantidad_recibida if entrada.cantidad_recibida is not None else entrada.cantidad
+            
+            movimientos.append({
+                'fecha': entrada.compra.fecha_compra, 
+                'origen': 'Compra',
+                'documento': f"Doc. Prov: {entrada.compra.numero_comprobante}",
+                'entrada': cantidad_real_ingresada, # <--- Ahora usamos la variable validada
+                'salida': 0,
+                'usuario': "Sistema (Bodega)"
+            })
 
     for ajuste in ajustes:
         # Asumimos que tu modelo AjusteInventario tiene un campo de fecha o creacion
@@ -994,3 +1126,18 @@ def kardex_list(request):
         'valor_total_bodega': valor_total_bodega,
     }
     return render(request, 'core/kardex_list.html', context)    
+
+def solicitar_acceso(request):
+    if request.method == 'POST':
+        formulario = SolicitudAccesoForm(request.POST)
+        if formulario.is_valid():
+            formulario.save()
+            # Mostramos un mensaje de éxito y lo devolvemos al login
+            messages.success(request, 'Tu solicitud ha sido enviada al administrador.')
+            return redirect('login') # Asegúrate de que 'login' sea el nombre correcto de tu URL
+    else:
+        formulario = SolicitudAccesoForm()
+    
+    return render(request, 'core/solicitar_acceso.html', {'formulario': formulario})    
+
+    

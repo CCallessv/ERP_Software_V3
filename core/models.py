@@ -271,11 +271,13 @@ class MovimientoInventario(models.Model):
         super().save(*args, **kwargs)
 #########################################################################
 class Compra(models.Model):
-
     
     ESTADO_COMPRA = [
-        ('borrador', 'Borrador (No afecta stock)'),
-        ('completada', 'Completada (Stock actualizado)'),
+        ('borrador', 'Borrador (Digitando factura)'),
+        ('en_transito', 'En Tránsito (Pagada, esperando llegada)'),
+        ('recibida', 'Recibida en Bodega (Stock actualizado)'), #todo cuadro
+        ('parcial', 'Recibida con Diferencias'), # Hay faltantes
+        ('ajustada', 'Cerrada con Nota de Crédito'), # Faltantes resueltos legalmente
         ('anulada', 'Anulada (Stock revertido)'),
     ]
     
@@ -284,6 +286,7 @@ class Compra(models.Model):
         ('factura', 'Factura de Consumidor Final'),
         ('recibo', 'Recibo / Otro'),
     ]
+    
     id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name='compras')
     fecha_compra = models.DateField(default=timezone.now, verbose_name="Fecha de Compra")
@@ -300,6 +303,7 @@ class Compra(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.PROTECT)
     creado_en = models.DateTimeField(auto_now_add=True)
 
+    observaciones = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución (Diferencias)")
     class Meta:
         ordering = ['-fecha_compra', '-id']
         # Evita ingresar la misma factura del mismo proveedor 2 veces
@@ -308,11 +312,21 @@ class Compra(models.Model):
     def __str__(self):
         return f"Compra {self.numero_comprobante} - {self.proveedor.nombre_comercial}"
 
+    @property
+    def tiene_discrepancias(self):
+        """Retorna True si alguna cantidad recibida es distinta a la facturada."""
+        if self.estado != 'recibida':
+            return False
+        for detalle in self.detalles.all():
+            if detalle.cantidad_recibida is not None and detalle.cantidad != detalle.cantidad_recibida:
+                return True
+        return False
 ##############################################################################
 class DetalleCompra(models.Model):
     compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='detalles')
     producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
-    
+    # En models.py -> clase DetalleCompra
+    cantidad_recibida = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     cantidad = models.DecimalField(max_digits=10, decimal_places=2)
     precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Unitario")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
@@ -495,5 +509,19 @@ class AjusteInventario(models.Model):
                     raise ValueError("No puedes retirar más stock del que existe.")
             self.producto.save()      
 
+class SolicitudAcceso(models.Model):
+    ESTADOS = (
+        ('pendiente', 'Pendiente'),
+        ('aprobada', 'Aprobada'),
+        ('rechazada', 'Rechazada'),
+    )
+    
+    nombres = models.CharField(max_length=150)
+    correo = models.EmailField(unique=True)
+    motivo = models.TextField(help_text="¿Por qué necesita acceso al ERP?")
+    estado = models.CharField(max_length=15, choices=ESTADOS, default='pendiente')
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return f"{self.nombres} - {self.correo} ({self.estado})"
 

@@ -1,0 +1,72 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+    <title>Solicitar Acceso - ERP</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/css/tabler.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/css/tabler-vendors.min.css">
+</head>
+<body class="d-flex flex-column theme-dark">
+    <div class="page page-center">
+        <div class="container container-tight py-4">
+            
+            <div class="text-center mb-4">
+                <a href="/" class="navbar-brand">
+                    <img src="{% static 'img/logo.jpg' %}" style="max-height: 150px; width: auto; border-radius: 8px;" alt="Sistema ERP">
+                </a>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible" role="alert">
+                        <div class="d-flex">
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 12l5 5l10 -10" /></svg>
+                            </div>
+                            <div>
+                                {{ message }}
+                            </div>
+                        </div>
+                        <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form class="card card-md" action="{% url 'solicitar_acceso' %}" method="post">
+                {% csrf_token %}
+                <div class="card-body">
+                    <h2 class="card-title text-center mb-4">Solicitar Acceso</h2>
+                    <p class="text-secondary text-center mb-4">Llena este formulario y el administrador revisará tu petición.</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Nombres Completos</label>
+                        {{ formulario.nombres }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Correo Institucional</label>
+                        {{ formulario.correo }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo o Cargo</label>
+                        {{ formulario.motivo }}
+                    </div>
+                    
+                    <div class="form-footer mt-4">
+                        <button type="submit" class="btn btn-primary w-100">Enviar Solicitud</button>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="text-center text-secondary mt-3">
+                ¿Ya tienes cuenta? <a href="{% url 'login' %}" tabindex="-1">Inicia sesión aquí</a>
+            </div>
+            
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/js/tabler.min.js"></script>
+</body>
+</html>

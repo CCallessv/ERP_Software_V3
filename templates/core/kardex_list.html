@@ -10,10 +10,12 @@
             </div>
             <div class="col-auto ms-auto d-print-none">
                 <div class="d-flex align-items-center">
+                    {% if request.user.is_staff %}
                     <div class="me-4 text-end">
                         <div class="text-muted">Valor en Bodega (Costo)</div>
                         <div class="h2 m-0 text-primary">${{ valor_total_bodega|floatformat:2 }}</div>
                     </div>
+                    {% endif %}
                     <div class="text-end">
                         <div class="text-muted">Alertas de Stock</div>
                         {% if productos_criticos > 0 %}
@@ -38,7 +40,9 @@
                             <th>Producto</th>
                             <th>Categoría</th>
                             <th>Ubicación</th>
+                            {% if request.user.is_staff %}
                             <th>Costo Unit.</th>
+                            {% endif %}
                             <th>Stock Actual</th>
                             <th>Estado</th>
                             <th class="w-1"></th>
@@ -53,7 +57,10 @@
                             </td>
                             <td>{{ producto.categoria.nombre|default:"Sin Categoría" }}</td>
                             <td class="text-muted">{{ producto.ubicacion|default:"No asignada" }}</td>
+                            
+                            {% if request.user.is_staff %}
                             <td>${{ producto.precio_costo }}</td>
+                            {% endif %}
                             
                             <td class="fs-3 fw-bold {% if producto.stock <= producto.stock_minimo %}text-danger{% endif %}">
                                 {{ producto.stock }}
@@ -77,7 +84,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">
+                            <td colspan="{% if request.user.is_staff %}7{% else %}6{% endif %}" class="text-center py-4 text-muted">
                                 No hay productos registrados en el inventario.
                             </td>
                         </tr>

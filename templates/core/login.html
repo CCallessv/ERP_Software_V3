@@ -22,7 +22,7 @@
             <div class="container container-tight my-5 px-lg-5">
                 <div class="text-center mb-4">
                     <a href="/" class="navbar-brand">
-                        <img src="{% static 'img/logo.jpg' %}" style="max-height: 150px; width: auto; border-radius: 8px;" alt="Finca Latina">
+                        <img src="{% static 'img/logo.jpg' %}" style="max-height: 150px; width: auto; border-radius: 8px;" alt="Sistema ERP">
                     </a>
                 </div>
                 <h2 class="h2 text-center mb-4">Iniciar sesión en tu cuenta</h2>
@@ -85,7 +85,7 @@
                 </form>
                 
                 <div class="text-center text-muted mt-3">
-                    ¿No tienes una cuenta? <a href="#" tabindex="-1">Contacta al administrador</a>
+                    ¿No tienes una cuenta? <a href="{% url 'solicitar_acceso' %}">Contacta al administrador</a>
                 </div>
             </div>
         </div>
