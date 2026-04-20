@@ -247,6 +247,7 @@
     <script src="{% static 'js/modal_productos_handler.js' %}"></script>
 
     <script>
+        // 1. TU FUNCIÓN DE MÁSCARAS INTACTA
         function aplicarMascaras() {
             const inputDoc = document.getElementById('id_documento');
             const inputTel = document.getElementById('id_telefono');
@@ -277,21 +278,41 @@
                 IMask(inputNrc, { mask: /^[0-9-]{0,9}$/ }); 
             }
         }
-    
-        document.body.addEventListener("htmx:afterSwap", function(evt) {
-            if (evt.detail.target.id === "modal-container") {
-                const modalElement = document.querySelector('#modal-container .modal');
-                if (modalElement) {
-                    const oldModal = bootstrap.Modal.getInstance(modalElement);
-                    if (oldModal) { oldModal.hide(); }
-                    
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                    aplicarMascaras();
-                }
+
+        // 2. EL CAZAFANTASMAS: Limpieza absoluta del DOM
+        function aniquilarFondoNegro() {
+            // Matamos todos los fondos negros que hayan quedado huérfanos
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(b => b.remove());
+            
+            // Le devolvemos el scroll y quitamos candados al body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }
+
+       // 3. CUANDO HTMX INYECTA EL MODAL O LA TABLA NUEVA
+       document.body.addEventListener("htmx:afterSwap", function(evt) {
+            
+        // --- NUEVO: Despertar los menús desplegables (Dropdowns) ---
+        const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+        dropdowns.forEach(btn => new bootstrap.Dropdown(btn));
+        // -----------------------------------------------------------
+
+        if (evt.detail.target.id === "modal-container") {
+            // Siempre barremos la basura antes de intentar abrir el nuevo
+            aniquilarFondoNegro();
+
+            const modalElement = document.querySelector('#modal-container .modal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                aplicarMascaras();
             }
-        });
-    
+        }
+    });
+
+        // 4. CUANDO SE CIERRA CON ÉXITO (Código 204 de HTMX)
         document.body.addEventListener("htmx:beforeSwap", function(evt) {
             if (evt.detail.xhr.status === 204) {
                 const openModal = document.querySelector('.modal.show');
@@ -299,16 +320,20 @@
                     const modalInstance = bootstrap.Modal.getInstance(openModal);
                     if (modalInstance) { modalInstance.hide(); }
                 }
+                // Limpieza agresiva un instante después
+                setTimeout(aniquilarFondoNegro, 200);
             }
         });
-    
+
+        // 5. RED DE SEGURIDAD: Cuando el modal termina su animación de cierre
         document.body.addEventListener("hidden.bs.modal", function(evt) {
             const container = document.getElementById("modal-container");
             if (container) {
                 container.innerHTML = ""; 
             }
+            aniquilarFondoNegro(); // Ejecutamos la limpieza final por si acaso
         });
-    </script>
+</script>
 
     {% block scripts %}
     {% endblock %}

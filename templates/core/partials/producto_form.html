@@ -7,7 +7,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             
-            <form hx-post="{% url 'crear_producto' %}" hx-target="#modal-container" autocomplete="off" enctype="multipart/form-data">
+            <form hx-post="{% if form.instance.pk %}{% url 'editar_producto' form.instance.pk %}{% else %}{% url 'crear_producto' %}{% endif %}" hx-target="#modal-container">
                 {% csrf_token %}
                 
                 <div class="modal-body">

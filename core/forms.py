@@ -4,6 +4,8 @@ from .models import (
     Cliente, Producto, Proveedor, Categoria, 
     PresentacionProducto, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,
 )
+from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 class ClienteForm(forms.ModelForm):
     class Meta:
@@ -95,9 +97,6 @@ class ClienteForm(forms.ModelForm):
             raise forms.ValidationError("Los días de crédito no pueden ser negativos.")
         return plazo
 # === FORMULARIO DE PRODUCTOS ===
-from decimal import Decimal
-from django import forms
-from .models import Producto # Ajusta según tu estructura
 
 class ProductoForm(forms.ModelForm):
     class Meta:
@@ -111,7 +110,6 @@ class ProductoForm(forms.ModelForm):
         
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Aplicamos clases de Bootstrap
         for field_name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs['class'] = 'form-check-input'
@@ -123,50 +121,69 @@ class ProductoForm(forms.ModelForm):
         self.fields['stock'].initial = 0.00
         self.fields['stock'].help_text = "El stock se gestiona vía compras o ajustes."
         
-        # Opcional: Asegurarnos de que los precios no acepten negativos desde el HTML
         self.fields['precio_costo'].widget.attrs['min'] = 0
         self.fields['precio_venta'].widget.attrs['min'] = 0
 
-    # 1. BLINDAJE CONTRA MANIPULACIÓN DEL STOCK (El más importante)
+    # 1. ANTIDUPLICADOS Y LIMPIEZA DE TEXTO
+    def clean_nombre(self):
+        nombre = self.cleaned_data.get('nombre', '').strip()
+        qs = Producto.objects.filter(nombre__iexact=nombre)
+        
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+            
+        if qs.exists():
+            raise ValidationError("Ya existe un producto registrado con este nombre exacto.")
+            
+        return nombre
+
+    # 2. BLINDAJE CONTRA MANIPULACIÓN DEL STOCK
     def clean_stock(self):
-        # Ignoramos lo que el usuario mande y forzamos a 0 en la creación
-        if not self.instance.pk: # Si es un producto nuevo
+        if not self.instance.pk:
             return Decimal('0.00')
-        # Si es edición, devolvemos el stock que ya está en la base de datos
         return self.instance.stock
 
-    # 2. VALIDACIONES DE NEGOCIO (Precios y Cantidades)
+    # 3. SEGURIDAD DE ARCHIVOS (Peso máximo de 2MB)
+    def clean_imagen(self):
+        imagen = self.cleaned_data.get('imagen')
+        if imagen:
+            peso_mb = imagen.size / (1024 * 1024)
+            if peso_mb > 2:
+                raise ValidationError(f"La imagen pesa {peso_mb:.1f}MB. El límite máximo es 2MB.")
+        return imagen
+
+    # 4. REGLAS DE NEGOCIO ESTRICTAS
     def clean(self):
         cleaned_data = super().clean()
         
-        # Validar precios negativos
         precio_costo = cleaned_data.get('precio_costo')
         precio_venta = cleaned_data.get('precio_venta')
-        
-        if precio_costo is not None and precio_costo < 0:
-            self.add_error('precio_costo', "El costo no puede ser negativo.")
-            
-        if precio_venta is not None and precio_venta < 0:
-            self.add_error('precio_venta', "El precio de venta no puede ser negativo.")
-
-        # Validar que no vendas más barato de lo que compras (si es vendible)
         es_vendible = cleaned_data.get('es_vendible')
-        if es_vendible and precio_costo and precio_venta:
-            if precio_venta < precio_costo:
-                self.add_error('precio_venta', "El precio de venta no puede ser menor al costo.")
-        
-        # Validar mínimos y máximos lógicos
+        es_comprable = cleaned_data.get('es_comprable')
         stock_minimo = cleaned_data.get('stock_minimo')
         stock_maximo = cleaned_data.get('stock_maximo')
         
+        # Reglas de Compras
+        if es_comprable:
+            if precio_costo is None or precio_costo <= 0:
+                self.add_error('precio_costo', "Un producto comprable requiere un costo mayor a $0.00.")
+                
+        # Reglas de Ventas
+        if es_vendible:
+            if precio_venta is None or precio_venta <= 0:
+                self.add_error('precio_venta', "Un producto vendible requiere un precio mayor a $0.00.")
+            if precio_costo and precio_venta and precio_venta <= precio_costo:
+                self.add_error('precio_venta', "El precio de venta debe ser estrictamente mayor al costo.")
+
+        # Lógica de Inventario
         if stock_minimo is not None and stock_minimo < 0:
-            self.add_error('stock_minimo', "No puede haber un mínimo negativo.")
-            
-        if stock_maximo is not None and stock_minimo is not None:
-            if stock_maximo < stock_minimo:
+            self.add_error('stock_minimo', "El mínimo no puede ser negativo.")
+        if stock_minimo is not None and stock_maximo is not None:
+            if stock_maximo <= stock_minimo:
                 self.add_error('stock_maximo', "El stock máximo debe ser mayor al mínimo.")
 
         return cleaned_data
+
 
 class ProveedorForm(forms.ModelForm):
     class Meta:

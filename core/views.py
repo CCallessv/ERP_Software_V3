@@ -20,6 +20,7 @@ from itertools import chain
 from operator import attrgetter
 from datetime import timedelta
 from django.db.models.functions import TruncDate
+from django.urls import reverse
 from collections import defaultdict
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
@@ -363,31 +364,52 @@ def crear_producto(request: HttpRequest) -> HttpResponse:
     return render(request, 'core/partials/producto_form.html', {'form': form, 'titulo_modal': 'Nuevo Producto'})
 
 
-def editar_producto(request: HttpRequest, pk: int) -> HttpResponse:
+@login_required
+@user_passes_test(es_administrador)
+def editar_producto(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
+
     if request.method == 'POST':
+        
         form = ProductoForm(request.POST, request.FILES, instance=producto)
         if form.is_valid():
             form.save()
+            
+            
             response = HttpResponse(status=204)
-            response['HX-Trigger'] = 'productoActualizado'
+            response['HX-Redirect'] = reverse('productos_list') 
+           
             return response
+        else:
+           
+           return render(request, 'core/partials/producto_form.html', {'form': form, 'producto': producto, 'titulo_modal': f'Editar Producto: {producto.nombre}'})
     else:
+        
         form = ProductoForm(instance=producto)
-    return render(request, 'core/partials/producto_form.html', {
-        'form': form,
-        'titulo_modal': f'Editar: {producto.codigo}'
-    })
+        return render(request, 'core/partials/producto_form.html', {'form': form, 'producto': producto})
 
 
-def eliminar_producto(request: HttpRequest, pk: int) -> HttpResponse:
+@login_required
+@user_passes_test(es_administrador)
+def eliminar_producto(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
+
     if request.method == 'POST':
-        producto.activo = False
-        producto.save()
+        # PROTECCIÓN ERP: No podemos borrar algo que tiene existencias
+        if producto.stock > 0:
+            return render(request, 'core/partials/producto_confirm_delete.html', {
+                'producto': producto,
+                'error': 'No puedes eliminar un producto que aún tiene stock en bodega.'
+            })
+            
+        producto.delete()
+        
+        # Le decimos a HTMX: "Cierra el modal y recarga la lista de productos"
         response = HttpResponse(status=204)
-        response['HX-Trigger'] = 'productoActualizado'
+        response['HX-Redirect'] = reverse('productos_list')
         return response
+
+    # Si es GET, solo devolvemos el diseño de la ventanita
     return render(request, 'core/partials/producto_confirm_delete.html', {'producto': producto})
 
 
@@ -741,43 +763,58 @@ def compra_resolver_discrepancia(request, id_publico):
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
-    # 1. Recibir datos del Modal (Por POST)
+    # 1. Si HTMX pide el formulario (GET) para abrir el modal
+    if request.method == 'GET':
+        clientes = Cliente.objects.filter(estado=True).order_by('nombres')
+        return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
+
+    # 2. Si HTMX envía los datos para guardar (POST)
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
 
+        # Validación estricta
         if not cliente_id or not tipo_documento:
-            messages.error(request, "Faltan datos. Debes seleccionar un cliente y el tipo de documento.")
-            return redirect('venta_list')
+            clientes = Cliente.objects.filter(estado=True).order_by('nombres')
+            # Devolvemos el mismo modal pero con un mensaje de error inyectado
+            return render(request, 'core/partials/venta_borrador_form.html', {
+                'clientes': clientes,
+                'error': "Faltan datos. Debes seleccionar un cliente y el tipo de documento."
+            })
 
         cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # 2. Crear el registro SIN caja
+        # Crear la venta
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
             tipo_documento=tipo_documento
-            # ¡Adiós sesion_caja!
         )
         
-        return redirect('venta_detalle', codigo_generacion=nueva_venta.codigo_generacion)
-
-    return redirect('venta_list')
+        # LA CLAVE: No usamos un redirect normal de Django.
+        # Le ordenamos a HTMX que cambie la URL del navegador al detalle de la venta.
+        response = HttpResponse(status=204)
+        response['HX-Redirect'] = reverse('venta_detalle', kwargs={'codigo_generacion': nueva_venta.codigo_generacion})
+        return response
 
 
 #VENTAS
 @login_required
 @user_passes_test(es_administrador)
 def venta_list(request):
-    ventas = Venta.objects.all().order_by('-fecha_hora_emision')
+    # 1. Traemos todas las ventas ordenadas
+    ventas_lista = Venta.objects.all().order_by('-fecha_hora_emision')
+    
+    # 2. Las rebanamos en bloques de 10
+    paginator = Paginator(ventas_lista, 10) 
+    page_number = request.GET.get('page')
+    ventas_paginadas = paginator.get_page(page_number)
+    
     clientes = Cliente.objects.filter(estado=True).order_by('nombres')
     
-    # Adiós búsqueda de caja activa
-    
     context = {
-        'ventas': ventas,
+        'ventas': ventas_paginadas, # Mandamos la rebanada, no el pastel entero
         'clientes': clientes, 
-        # Adiós sesion_activa
     }
     return render(request, 'core/venta_list.html', context)
 

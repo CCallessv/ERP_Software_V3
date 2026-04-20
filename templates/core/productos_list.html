@@ -140,10 +140,9 @@
           </tbody>
         </table>
       </div>
+      {% include 'core/partials/paginacion.html' with page_obj=productos %}
     </div> 
   </div> 
 </div> 
 <div id="modal-container"></div>
-
-<script src="{% static 'js/dropdown_AccionesProductos.js' %}"></script>
 {% endblock %}
