@@ -76,3 +76,11 @@
     </td>
 </tr>
 {% endfor %}
+
+{% if request.META.HTTP_HX_REQUEST %}
+<template>
+    <div id="kpi-total-productos" hx-swap-oob="true" class="font-weight-medium">{{ total_productos }}</div>
+    <div id="kpi-stock-bajo" hx-swap-oob="true" class="font-weight-medium">{{ stock_bajo }}</div>
+    <div id="kpi-valor-total" hx-swap-oob="true" class="font-weight-medium">${{ valor_total|floatformat:2 }}</div>
+</template>
+{% endif %}

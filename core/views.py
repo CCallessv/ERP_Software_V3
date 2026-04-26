@@ -61,7 +61,7 @@ class CustomLoginView(LoginView):
     template_name = 'core/login.html' 
 
     def get_success_url(self):
-        # Aquí interceptamos a dónde va el usuario DESPUÉS de poner bien su clave
+        # Aqui interceptamos a donde va el usuario DESPUES de poner bien su clave
         if self.request.user.is_staff:
             return reverse_lazy('home') # El administrador/gerente va al Dashboard
         
@@ -81,7 +81,7 @@ def home(request):
     )
     valor_inventario = inventario['valor_total'] or 0
 
-    # 3. Ventas del Período
+    # 3. Ventas del PerIodo
     ventas_mes = Venta.objects.filter(
         fecha_hora_emision__month=mes_actual,
         fecha_hora_emision__year=anio_actual,
@@ -90,7 +90,7 @@ def home(request):
     total_ventas = ventas_mes.aggregate(total=Sum('total_pagar'))['total'] or 0
     cantidad_ventas = ventas_mes.count()
 
-    # 3.5 Compras del Período
+    # 3.5 Compras del PerIodo
     compras_mes = Compra.objects.filter(
         fecha_compra__month=mes_actual,
         fecha_compra__year=anio_actual,
@@ -357,8 +357,6 @@ def crear_producto(request: HttpRequest) -> HttpResponse:
             response = HttpResponse(status=204)
             response['HX-Trigger'] = 'productoActualizado'
             return response
-        else:
-            print(" ERRORES DE PRODUCTO:", form.errors)
     else:
         form = ProductoForm()
     return render(request, 'core/partials/producto_form.html', {'form': form, 'titulo_modal': 'Nuevo Producto'})
@@ -395,7 +393,7 @@ def eliminar_producto(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
 
     if request.method == 'POST':
-        # PROTECCIÓN ERP: No podemos borrar algo que tiene existencias
+        # PROTECCION ERP: No podemos borrar algo que tiene existencias
         if producto.stock > 0:
             return render(request, 'core/partials/producto_confirm_delete.html', {
                 'producto': producto,
@@ -404,7 +402,7 @@ def eliminar_producto(request, pk):
             
         producto.delete()
         
-        # Le decimos a HTMX: "Cierra el modal y recarga la lista de productos"
+        # Le decimos a HTMX: Cierra el modal y recarga la lista de productos
         response = HttpResponse(status=204)
         response['HX-Redirect'] = reverse('productos_list')
         return response
@@ -526,8 +524,6 @@ def crear_categoria(request: HttpRequest) -> HttpResponse:
             response = HttpResponse(status=204)
             response['HX-Refresh'] = 'true'
             return response
-        else:
-            print(" ERRORES DE VALIDACIÓN:", form.errors)
     else:
         form = CategoriaForm()
     return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Nueva Categoría'})
@@ -580,6 +576,69 @@ def gestionar_presentaciones(request: HttpRequest, pk: int) -> HttpResponse:
         'form': form
     })
 
+@login_required
+@user_passes_test(es_administrador)
+def cargar_presentaciones(request):
+    producto_id = request.GET.get('producto')
+    
+    if producto_id:
+        producto = get_object_or_404(Producto, id=producto_id)
+        presentaciones = producto.presentaciones.filter(activo=True)
+        
+        # Inyectamos el cálculo dinámico: ¿Cuántas de esta presentación podemos armar?
+        for p in presentaciones:
+            if p.factor_conversion > 0:
+                # Usamos int() para no mostrar que alcanza para "2.5 Cajas". O te alcanza para la caja entera o no.
+                p.stock_real_calculado = int(producto.stock / p.factor_conversion) 
+            else:
+                p.stock_real_calculado = 0
+
+        return render(request, 'core/partials/opciones_presentacion.html', {
+            'producto': producto,
+            'presentaciones': presentaciones
+        })
+        
+    return HttpResponse('<option value="base">Unidad Base</option>')
+
+@require_POST
+@user_passes_test(es_administrador)
+def venta_sellar(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    
+    if venta.estado != 'borrador':
+        messages.error(request, 'Esta factura ya fue sellada o anulada.')
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+        
+    detalles = venta.detalles.all()
+    if not detalles.exists():
+        messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+    try:
+        with transaction.atomic():
+            for detalle in detalles:
+                # BLOQUEO DE FILA: Evita que otro cajero toque este stock en el mismo milisegundo
+                producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
+                
+                # CÁLCULO ESTRICTO: Determinar cuánto descontar realmente del Kárdex
+                factor = detalle.presentacion.factor_conversion if detalle.presentacion else Decimal('1.00')
+                descuento_real_kardex = detalle.cantidad * factor
+                
+                # Validar otra vez. El stock pudo cambiar desde que el cajero armó el borrador.
+                if descuento_real_kardex > producto.stock:
+                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Alguien más lo facturó primero. Quedan {producto.stock} {producto.get_unidad_medida_base_display()} en bodega.")
+                
+                producto.stock -= descuento_real_kardex
+                producto.save()
+            
+            venta.estado = 'sellada' 
+            venta.save()
+            messages.success(request, 'Documento sellado de forma segura. Inventario actualizado.')        
+    except ValueError as e:
+        messages.error(request, str(e))
+        
+    return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
 #Modulo de COMPRAS
 @login_required
 @user_passes_test(es_administrador)
@@ -592,10 +651,6 @@ def crear_compra(request: HttpRequest) -> HttpResponse:
             nueva_compra.estado = 'borrador'
             nueva_compra.save()
             return redirect('compra_detalle', id_publico=nueva_compra.id_publico) 
-
-        else:
-            
-            print("ERRORES DEL FORMULARIO:", form.errors)
     else:
         form = CompraForm()
     return render(request, 'core/partials/compra_form.html', {'form': form})
@@ -828,36 +883,71 @@ def venta_agregar_producto(request, codigo_generacion):
         return HttpResponse("Error: Factura sellada.")
         
     producto_id = request.POST.get('producto')
+    presentacion_id = request.POST.get('presentacion') 
+    
     try:
-        cantidad = Decimal(request.POST.get('cantidad', 0))
-        descuento = Decimal(request.POST.get('descuento', 0))
+        cantidad_entrante = Decimal(request.POST.get('cantidad', 0))
+        descuento_entrante = Decimal(request.POST.get('descuento', 0))
     except Exception:
         return HttpResponse("Error: Valores numéricos inválidos.")
         
     producto = get_object_or_404(Producto, id=producto_id)
-    
-    if cantidad > producto.stock:
-        return HttpResponse(f"¡Alerta! Intentas vender {cantidad} pero solo quedan {producto.stock}.")
+    presentacion = None
+    factor = Decimal('1.00')
+    precio_base = producto.precio_venta
 
-    # Lógica de precio e IVA
-    precio_real = producto.precio_venta
-    if venta.tipo_documento == 'CCF':
-        precio_real = (producto.precio_venta / Decimal('1.13')).quantize(Decimal('0.01'))
+    # Extraemos valores si hay presentación
+    if presentacion_id and presentacion_id != 'base':
+        presentacion = get_object_or_404(PresentacionProducto, id=presentacion_id, producto=producto)
+        factor = presentacion.factor_conversion
+        precio_base = presentacion.precio_venta
 
-    # Guardado
-    DetalleVenta.objects.create(
+    # 1. Buscamos si ya existe ANTES de validar el stock
+    detalle_existente = DetalleVenta.objects.filter(
         venta=venta,
         producto=producto,
-        cantidad=cantidad,
-        precio_unitario=precio_real,
-        descuento=descuento,
-        tipo_afectacion='gravada'
-    )
+        presentacion=presentacion
+    ).first()
+
+    # 2. Calculamos la cantidad total real que terminaría en la factura
+    cantidad_total_visual = cantidad_entrante
+    if detalle_existente:
+        cantidad_total_visual += detalle_existente.cantidad
+
+    # 3. Matemática de stock: Convertimos esa cantidad visual a la unidad base del Kárdex
+    cantidad_total_a_descontar = cantidad_total_visual * factor
+
+    # 4. Validamos el total acumulado contra lo que realmente hay en bodega
+    if cantidad_total_a_descontar > producto.stock:
+        error_msg = f"¡Bloqueo de Inventario! Intentas facturar un total de {cantidad_total_a_descontar} {producto.get_unidad_medida_base_display()}, pero solo quedan {producto.stock} en bodega."
+        # Devolvemos la tabla intacta, pero le inyectamos la variable de error
+        return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta, 'error': error_msg})
+
+    # 5. Lógica de precio e IVA
+    precio_real = precio_base
+    if venta.tipo_documento == 'CCF':
+        precio_real = (precio_base / Decimal('1.13')).quantize(Decimal('0.01'))
+
+    # 6. Ejecución del guardado (Agrupar vs Crear)
+    if detalle_existente:
+        detalle_existente.cantidad += cantidad_entrante
+        detalle_existente.descuento += descuento_entrante
+        detalle_existente.save()
+    else:
+        DetalleVenta.objects.create(
+            venta=venta,
+            producto=producto,
+            presentacion=presentacion,
+            cantidad=cantidad_entrante,         
+            precio_unitario=precio_real,
+            descuento=descuento_entrante,
+            tipo_afectacion='gravada'
+        )
     
     venta.refresh_from_db()
-    
-    # ESTA ES LA ÚNICA RESPUESTA. Cero strings de HTML manuales.
     return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
+    
+
 
 
 @require_POST
@@ -901,27 +991,36 @@ def venta_sellar(request, codigo_generacion):
         
     detalles = venta.detalles.all()
     if not detalles.exists():
-        messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
+        messages.warning(request, 'No puedes sellar una factura vacía.')
         return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
     try:
         with transaction.atomic():
             for detalle in detalles:
-                producto = detalle.producto
-                if detalle.cantidad > producto.stock:
-                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Quedan {producto.stock}.")
+                # 1. BLOQUEO DE FILA: Nadie toca este producto hasta que terminemos
+                producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
                 
-                producto.stock -= detalle.cantidad
+                factor = detalle.presentacion.factor_conversion if detalle.presentacion else Decimal('1.00')
+                descuento_real_inventario = detalle.cantidad * factor
+                
+                # 3. Validación de última hora (por si el stock bajó mientras el cajero dudaba)
+                if descuento_real_inventario > producto.stock:
+                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Se intentó descontar {descuento_real_inventario} lb, pero solo hay {producto.stock} lb.")
+                
+                # 4. Descuento real y guardado
+                producto.stock -= descuento_real_inventario
                 producto.save()
             
+            # 5. Marcamos la factura como procesada
             venta.estado = 'sellada' 
             venta.save()
             
-            # ¡Adiós al bloque de sumar dinero a la caja!
+            messages.success(request, 'Factura sellada. Inventario actualizado correctamente usando factores de conversión.')
             
-            messages.success(request, f'Documento sellado. Se descontaron los productos del Kardex. (CxC pendiente)')        
     except ValueError as e:
         messages.error(request, str(e))
+    except Exception as e:
+        messages.error(request, f"Error crítico en el sellado: {str(e)}")
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 

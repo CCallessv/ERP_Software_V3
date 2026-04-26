@@ -52,52 +52,57 @@
         </div>
 
         <div class="card">
-            
-            <form hx-post="{% url 'venta_agregar_producto' venta.codigo_generacion %}" 
-      hx-target="#tabla-detalles-venta" 
-      hx-swap="outerHTML" 
-      hx-on::after-request="this.reset()" 
-      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-      class="row g-2 align-items-end"
-      id="form-agregar-producto">
-    
-    <div class="col-md-4">
-        <label class="form-label text-danger">Producto *</label>
-        <select class="form-select" name="producto" required>
-            <option value="">Selecciona un producto del inventario...</option>
-            {% for p in productos %}
-                <option value="{{ p.id }}">{{ p.codigo }} - {{ p.nombre }} (Stock Disp: {{ p.stock|floatformat:2 }} {{ p.get_unidad_medida_base_display }})</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label text-danger">Cantidad *</label>
-        <input type="number" class="form-control" name="cantidad" step="0.01" min="0.01" placeholder="Ej: 1.5" required>
-    </div>
-    <div class="col-md-2">
-        <label class="form-label">Descuento ($)</label>
-        <input type="number" class="form-control" name="descuento" step="0.01" min="0" value="0.00">
-    </div>
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-primary w-100">
-            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            Agregar a la Factura
-        </button>
-    </div>
-</form>
-</div>
-            
-{% if venta.estado == 'borrador' %}
+            {% if venta.estado == 'borrador' %}
             <div class="card-body border-bottom">
+                
                 <form hx-post="{% url 'venta_agregar_producto' venta.codigo_generacion %}" 
                       hx-target="#contenedor-facturacion" 
                       hx-swap="outerHTML" 
-                      hx-on::after-request="this.reset()" 
+                      hx-on::after-request="if(event.target.id === 'form-agregar-producto') this.reset()"
                       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                       class="row g-2 align-items-end"
                       id="form-agregar-producto">
-                      
-                      </form>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label text-danger">Producto *</label>
+                        <select class="form-select" name="producto" required
+                                hx-get="{% url 'cargar_presentaciones' %}"
+                                hx-target="#select-presentacion"
+                                hx-swap="innerHTML">
+                            <option value="">Selecciona un producto...</option>
+                            {% for p in productos %}
+                                <option value="{{ p.id }}">
+                                    {{ p.codigo }} - {{ p.nombre }} (Stock: {{ p.stock|floatformat:2 }} {{ p.get_unidad_medida_base_display }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label text-danger">Presentación *</label>
+                        <select class="form-select" name="presentacion" id="select-presentacion" required>
+                            <option value="base">Unidad Base</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label text-danger">Cantidad *</label>
+                        <input type="number" class="form-control" name="cantidad" step="0.01" min="0.01" placeholder="Ej: 1.5" required>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">Descuento ($)</label>
+                        <input type="number" class="form-control" name="descuento" step="0.01" min="0" value="0.00">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                            Agregar
+                        </button>
+                    </div>
+                </form>
+                
             </div>
             {% endif %}
 
@@ -107,4 +112,3 @@
     </div> 
 </div> 
 {% endblock %}
-            

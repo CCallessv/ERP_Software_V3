@@ -56,7 +56,7 @@
                             </span>
                         </div>
                         <div class="col">
-                            <div class="font-weight-medium">{{ total_productos }}</div>
+                          <div class="font-weight-medium" id="kpi-total-productos">{{ total_productos }}</div>
                             <div class="text-secondary">Total productos</div>
                         </div>
                     </div>
@@ -74,7 +74,7 @@
                             </span>
                         </div>
                         <div class="col">
-                            <div class="font-weight-medium">{{ stock_bajo }}</div>
+                          <div class="font-weight-medium" id="kpi-stock-bajo">{{ stock_bajo }}</div>
                             <div class="text-secondary">Stock bajo</div>
                         </div>
                     </div>
@@ -92,7 +92,7 @@
                             </span>
                         </div>
                         <div class="col">
-                            <div class="font-weight-medium">${{ valor_total|floatformat:2 }}</div>
+                          <div class="font-weight-medium" id="kpi-valor-total">${{ valor_total|floatformat:2 }}</div>
                             <div class="text-secondary">Valor total inventario</div>
                         </div>
                     </div>
@@ -106,8 +106,14 @@
           <div class="text-secondary">
             Buscar:
             <div class="ms-2 d-inline-block">
-                <input type="text" class="form-control form-control-sm" placeholder="Nombre o SKU...">
-              </div>
+              <input type="text" 
+                     name="q" 
+                     class="form-control form-control-sm" 
+                     placeholder="Nombre o SKU..."
+                     hx-get="{% url 'productos_list' %}"
+                     hx-target="#tabla-productos"
+                     hx-trigger="keyup changed delay:400ms">
+          </div>
           </div>
         </div>
       </div>

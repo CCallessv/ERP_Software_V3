@@ -21,7 +21,7 @@ from core.views import home, exit, clientes_list, crear_cliente, editar_cliente,
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria, gestionar_presentaciones,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
 from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle,solicitar_acceso
-from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia
+from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia, cargar_presentaciones
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -90,5 +90,6 @@ urlpatterns = [
     path('inventario/recepciones/<uuid:id_publico>/', recepcion_detalle, name='recepcion_detalle'),
     
    path('compras/resolver/<uuid:id_publico>/', compra_resolver_discrepancia, name='compra_resolver_discrepancia'),
+   path('ventas/cargar-presentaciones/', cargar_presentaciones, name='cargar_presentaciones'),
 ]
 

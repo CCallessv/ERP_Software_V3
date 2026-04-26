@@ -8,6 +8,7 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models import Sum
 
+
 class Cliente(models.Model):
     # Identificación
     codigo = models.CharField(max_length=20, unique=True, null=True, blank=True, verbose_name="Código Cliente") # Nuevo
@@ -65,7 +66,7 @@ class Categoria(models.Model):
 ###########################################################3
 
 class Producto(models.Model):
-    # La unidad maestra. Todo el stock se cuenta matemáticamente en esta unidad.
+    
     UNIDADES_BASE = [
         ('und', 'Unidad (Und)'),
         ('lb', 'Libra (Lb)'),
@@ -76,12 +77,12 @@ class Producto(models.Model):
         ('mts', 'Metro (Mts)'),
     ]
 
-    # Identificación
+    # Identificacion
     codigo = models.CharField(max_length=50, unique=True, verbose_name="Código / SKU")
     nombre = models.CharField(max_length=200, verbose_name="Nombre del Producto")
     categoria = models.ForeignKey('Categoria', on_delete=models.PROTECT, related_name='productos', verbose_name="Categoría")
     
-    # --- Inventario Base (Núcleo Matemático) ---
+    # --- Inventario Base (Nucleo Matemático) ---
     unidad_medida_base = models.CharField(max_length=10, choices=UNIDADES_BASE, default='und', verbose_name="Unidad Base")
     ubicacion = models.CharField(max_length=50, blank=True, null=True, verbose_name="Ubicación en Bodega")
     
@@ -111,34 +112,30 @@ class Producto(models.Model):
         ordering = ['nombre']
 #############################################################################3
 
-class PresentacionProducto(models.Model):
-    """
-    Motor Multi-Unidad (UoM). 
-    Ejemplo: Producto = Crema (Base: Libra). 
-    Presentación 1 = "Botella", Factor = 1.5, Precio = $3.00
-    Presentación 2 = "Media Libra", Factor = 0.5, Precio = $1.00
-    """
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='presentaciones')
-    nombre = models.CharField(max_length=100, verbose_name="Nombre de Presentación", help_text="Ej: Botella, Caja x50, Media Libra")
-    codigo_barras = models.CharField(max_length=50, blank=True, null=True, unique=True, verbose_name="Código de Barras")
+class DetalleVenta(models.Model):
+    venta = models.ForeignKey('Venta', related_name='detalles', on_delete=models.CASCADE)
+    producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
     
-    # El eslabón matemático: Cuánto descuenta del stock maestro
-    factor_conversion = models.DecimalField(
-        max_digits=10, decimal_places=4, 
-        verbose_name="Equivalencia en Unidad Base",
-        help_text="¿Cuántas unidades base contiene o consume esta presentación?"
+    presentacion = models.ForeignKey('PresentacionProducto', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2) 
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2) 
+    
+    descuento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    otros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    TIPO_AFECTACION = (
+        ('gravada', 'Gravada'),
+        ('exenta', 'Exenta'),
+        ('no_sujeta', 'No Sujeta'),
     )
-    
-    # Te permite vender la botella más cara que si vendieras la libra suelta
-    precio_venta = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Específico")
-    activo = models.BooleanField(default=True)
+    tipo_afectacion = models.CharField(max_length=15, choices=TIPO_AFECTACION, default='gravada')
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
 
-    def __str__(self):
-        return f"{self.nombre} de {self.producto.nombre}"
-
-    class Meta:
-        verbose_name = "Presentación"
-        verbose_name_plural = "Presentaciones"
+    def save(self, *args, **kwargs):
+        base = (Decimal(str(self.cantidad)) * Decimal(str(self.precio_unitario)))
+        self.subtotal = base - Decimal(str(self.descuento)) + Decimal(str(self.otros))
+        super().save(*args, **kwargs)
 
 ##########################################################
 class Proveedor(models.Model):
@@ -409,36 +406,7 @@ class Venta(models.Model):
     def __str__(self):
         return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"
 
-
-class DetalleVenta(models.Model):
-    venta = models.ForeignKey(Venta, related_name='detalles', on_delete=models.CASCADE)
-    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
     
-    # CANTIDADES BASE
-    # Nota: Uso DecimalField en cantidad porque en alimentos a veces vendes "1.5 libras"
-    cantidad = models.DecimalField(max_digits=10, decimal_places=2) 
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2) # Sin IVA si es CCF, Con IVA si es FCF
-    
-    # MODIFICADORES DE LÍNEA
-    descuento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    otros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    # CLASIFICACIÓN TRIBUTARIA (Reemplaza las 3 columnas del PDF)
-    TIPO_AFECTACION = (
-        ('gravada', 'Gravada'),
-        ('exenta', 'Exenta'),
-        ('no_sujeta', 'No Sujeta'),
-    )
-    tipo_afectacion = models.CharField(max_length=15, choices=TIPO_AFECTACION, default='gravada')
-    
-    # EL RESULTADO MATEMÁTICO FINAL DE LA LÍNEA
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
-
-    def save(self, *args, **kwargs):
-        # La fórmula estricta según Hacienda: (Cantidad * Precio Unitario) - Descuento + Otros
-        base = (Decimal(str(self.cantidad)) * Decimal(str(self.precio_unitario)))
-        self.subtotal = base - Decimal(str(self.descuento)) + Decimal(str(self.otros))
-        super().save(*args, **kwargs)       
 
 # INTERCEPTOR TRIBUTARIO PARA EL SALVADOR
 @receiver(post_save, sender=DetalleVenta)
@@ -525,3 +493,25 @@ class SolicitudAcceso(models.Model):
     def __str__(self):
         return f"{self.nombres} - {self.correo} ({self.estado})"
 
+
+class PresentacionProducto(models.Model):
+    # Usamos comillas en 'Producto' para evitar los errores circulares de antes
+    producto = models.ForeignKey('Producto', on_delete=models.CASCADE, related_name='presentaciones')
+    nombre = models.CharField(max_length=100, verbose_name="Nombre de Presentación", help_text="Ej: Botella, Caja x50, Media Libra")
+    codigo_barras = models.CharField(max_length=50, blank=True, null=True, unique=True, verbose_name="Código de Barras")
+    
+    factor_conversion = models.DecimalField(
+        max_digits=10, decimal_places=4, 
+        verbose_name="Equivalencia en Unidad Base",
+        help_text="¿Cuántas unidades base contiene o consume esta presentación?"
+    )
+    
+    precio_venta = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Específico")
+    activo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.nombre} de {self.producto.nombre}"
+
+    class Meta:
+        verbose_name = "Presentación"
+        verbose_name_plural = "Presentaciones"

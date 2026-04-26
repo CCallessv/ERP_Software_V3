@@ -1,4 +1,10 @@
-<div id="contenedor-facturacion" hx-swap-oob="true">
+<div id="contenedor-facturacion">
+    {% if error %}
+    <div class="alert alert-danger fw-bold m-3 shadow-sm d-flex align-items-center" role="alert">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon me-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+        <div>{{ error }}</div>
+    </div>
+    {% endif %}
     <div class="table-responsive">
         <table class="table table-vcenter card-table">
             <thead>
@@ -15,7 +21,16 @@
             <tbody id="tabla-detalles-venta">
                 {% for d in venta.detalles.all %}
                     <tr>
-                        <td>{{ d.producto.nombre }}</td>
+                        <td>
+                            <div class="font-weight-bold">{{ d.producto.nombre }}</div>
+                            <div class="text-secondary small">
+                                {% if d.presentacion %}
+                                    Presentación: {{ d.presentacion.nombre }}
+                                {% else %}
+                                    Presentación: Unidad Base ({{ d.producto.get_unidad_medida_base_display }})
+                                {% endif %}
+                            </div>
+                        </td>
                         <td>{{ d.cantidad }}</td>
                         <td>${{ d.precio_unitario }}</td>
                         <td>${{ d.descuento }}</td>

@@ -1,0 +1,7 @@
+<option value="base">Unidad Base: {{ producto.get_unidad_medida_base_display }} (${{ producto.precio_venta }}) - Alcanza para: {{ producto.stock|floatformat:2 }}</option>
+
+{% for p in presentaciones %}
+    <option value="{{ p.id }}" {% if p.stock_real_calculado < 1 %}disabled{% endif %}>
+        {{ p.nombre }} (${{ p.precio_venta }}) - Alcanza para: {{ p.stock_real_calculado }} {{ p.nombre }}(s)
+    </option>
+{% endfor %}
