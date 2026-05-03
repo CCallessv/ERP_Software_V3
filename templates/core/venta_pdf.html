@@ -132,6 +132,7 @@
                 <th width="10%">CANT.</th>
                 <th width="45%">DESCRIPCIÓN</th>
                 <th width="15%">P. UNIT.</th>
+                <th width="10%">DESC.</th>
                 <th width="15%">EXENTAS</th>
                 <th width="15%">GRAVADAS</th>
             </tr>
@@ -142,6 +143,10 @@
                 <td class="text-center">{{ detalle.cantidad }}</td>
                 <td>{{ detalle.producto.nombres|default:detalle.producto.nombre }}</td>
                 <td class="text-right">${{ detalle.precio_unitario }}</td>
+                
+                
+                <td class="text-right">${{ detalle.descuento|default_if_none:"0.00" }}</td>
+                
                 <td class="text-right">
                     {% if detalle.tipo_afectacion == 'exenta' %}
                         ${{ detalle.subtotal }}

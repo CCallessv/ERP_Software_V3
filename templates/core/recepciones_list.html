@@ -3,6 +3,23 @@
 {% block title %}Recepciones de Bodega - ERP{% endblock %}
 
 {% block content %}
+<style>
+    body, html {
+        overflow-x: hidden !important;
+        max-width: 100vw;
+    }
+    .page-wrapper {
+        min-width: 0 !important;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    .chart-container-strict {
+        position: relative;
+        height: 350px;
+        width: 100%;
+        max-width: 100%;
+    }
+  </style>
 <div class="page-header d-print-none">
     <div class="container-xl">
         <div class="row g-2 align-items-center">
@@ -33,7 +50,7 @@
                     <tbody>
                         {% for compra in compras %}
                         <tr>
-                            <td>{{ compra.fecha_compra|date:"d b Y" }}</td>
+                            <td>{{ compra.fecha_compra|date:"d M Y" }}</td>
                             <td>
                                 <div class="font-weight-medium">Doc: {{ compra.numero_comprobante }}</div>
                                 <div class="text-secondary small">{{ compra.get_tipo_comprobante_display }}</div>
@@ -41,14 +58,20 @@
                             <td>{{ compra.proveedor.nombre_comercial }}</td>
                             <td>
                                 {% if compra.estado == 'en_transito' %}
-                                    <span class="badge bg-yellow text-yellow-fg">En Tránsito (Pendiente)</span>
+                                    <span class="badge bg-transparent border border-yellow text-yellow">En Tránsito (Pendiente)</span>
                                 {% elif compra.estado == 'recibida' %}
-                                    <span class="badge bg-green text-green-fg">Ingresado al Kardex</span>
+                                    <span class="badge bg-transparent border border-green text-green">Ingresado al Kardex</span>
+                                {% elif compra.estado == 'parcial' %}
+                                    <span class="badge bg-transparent border border-orange text-orange">Ingreso Parcial</span>
+                                {% elif compra.estado == 'ajustada' %}
+                                    <span class="badge bg-transparent border border-purple text-purple">Cerrada / Ajustada</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="{% url 'recepcion_detalle' compra.id_publico %}" class="btn btn-sm {% if compra.estado == 'en_transito' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                    {% if compra.estado == 'en_transito' %}
+                                <!-- El boton cambia de acción según el estado logístico -->
+                                <a href="{% url 'recepcion_detalle' compra.id_publico %}" 
+                                   class="btn btn-sm {% if compra.estado == 'en_transito' or compra.estado == 'parcial' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                    {% if compra.estado == 'en_transito' or compra.estado == 'parcial' %}
                                         Validar Ingreso
                                     {% else %}
                                         Ver Guía
@@ -68,6 +91,7 @@
                     </tbody>
                 </table>
             </div>
+            {% include 'core/partials/paginacion.html' with page_obj=page_obj %}
         </div>
     </div>
 </div>

@@ -63,25 +63,16 @@
                       class="row g-2 align-items-end"
                       id="form-agregar-producto">
                     
-                    <div class="col-md-3">
+                      <div class="col-md-6">
                         <label class="form-label text-danger">Producto *</label>
-                        <select class="form-select" name="producto" required
-                                hx-get="{% url 'cargar_presentaciones' %}"
-                                hx-target="#select-presentacion"
-                                hx-swap="innerHTML">
+                       
+                        <select class="form-select" name="producto" id="producto_select" required>
                             <option value="">Selecciona un producto...</option>
                             {% for p in productos %}
                                 <option value="{{ p.id }}">
                                     {{ p.codigo }} - {{ p.nombre }} (Stock: {{ p.stock|floatformat:2 }} {{ p.get_unidad_medida_base_display }})
                                 </option>
                             {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label text-danger">Presentación *</label>
-                        <select class="form-select" name="presentacion" id="select-presentacion" required>
-                            <option value="base">Unidad Base</option>
                         </select>
                     </div>
 

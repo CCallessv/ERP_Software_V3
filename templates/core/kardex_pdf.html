@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Kardex Físico-Valorado - {{ producto.nombre }}</title>
+    <style>
+        /* CSS mínimo para que xhtml2pdf lo entienda y se vea decente */
+        @page { size: landscape; margin: 1cm; }
+        body { font-family: Helvetica, sans-serif; font-size: 10px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h2 { margin: 0; color: #2c3e50; }
+        .meta-data { margin-bottom: 20px; width: 100%; border-bottom: 1px solid #bdc3c7; padding-bottom: 10px; }
+        .meta-data td { padding: 2px 5px; }
+        table.kardex-table { width: 100%; border-collapse: collapse; }
+        .kardex-table th, .kardex-table td { border: 1px solid #ecf0f1; padding: 4px; text-align: right; }
+        .kardex-table th { background-color: #34495e; color: white; text-align: center; font-weight: bold; }
+        .text-left { text-align: left !important; }
+        .text-center { text-align: center !important; }
+        .text-success { color: #27ae60; }
+        .text-danger { color: #c0392b; }
+        .text-bold { font-weight: bold; }
+        .bg-light { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Reporte de Kardex Físico y Valorado</h2>
+    </div>
+
+    <table class="meta-data">
+        <tr>
+            <td class="text-left"><strong>Producto:</strong> {{ producto.nombre }}</td>
+            <td class="text-left"><strong>Código/SKU:</strong> {{ producto.codigo }}</td>
+            <td class="text-left"><strong>Unidad Base:</strong> {{ producto.get_unidad_medida_base_display }}</td>
+        </tr>
+        <tr>
+            <td class="text-left"><strong>Emitido por:</strong> {{ usuario_solicitante.username }}</td>
+            <td class="text-left"><strong>Fecha Emisión:</strong> {{ fecha_impresion|date:"d/m/Y H:i" }}</td>
+            <td class="text-left"><strong>Stock Actual Sistema:</strong> {{ producto.stock }}</td>
+        </tr>
+    </table>
+    
+    <table class="kardex-table">
+        <thead>
+            <tr>
+                <th rowspan="2">Fecha</th>
+                <th rowspan="2">Motivo</th>
+                <th rowspan="2">Documento</th>
+                <th colspan="3" class="bg-light text-center" style="color: #333;">Movimiento Físico</th>
+                <th colspan="4" class="bg-light text-center" style="color: #333;">Valoración Financiera ($)</th>
+            </tr>
+            <tr>
+                <th>Entrada</th>
+                <th>Salida</th>
+                <th>SALDO FÍSICO</th>
+                <th>Costo Unit.</th>
+                <th>Valor Mov.</th>
+                <th>Costo Prom.</th>
+                <th>SALDO TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mov in movimientos %}
+            <tr>
+                <td class="text-center">{{ mov.fecha|date:"d/m/y H:i" }}</td>
+                <td class="text-left">{{ mov.tipo_display }}</td>
+                <td class="text-left">{{ mov.referencia|default:"--" }}</td>
+                
+                <!-- Fisico -->
+                <td class="text-success">{% if mov.es_entrada %}{{ mov.cantidad|floatformat:2 }}{% else %}-{% endif %}</td>
+                <td class="text-danger">{% if mov.es_salida %}{{ mov.cantidad|floatformat:2 }}{% else %}-{% endif %}</td>
+                <td class="text-bold bg-light" style="color:#333;">{{ mov.saldo_fisico|floatformat:2 }}</td>
+                
+                <!-- Financiero -->
+                <td>{{ mov.costo_unitario|floatformat:4 }}</td>
+                <td>{% if mov.es_entrada %}+{% else %}-{% endif %}{{ mov.valor_movimiento|floatformat:2 }}</td>
+                <td class="text-bold">{{ mov.costo_promedio|floatformat:4 }}</td>
+                <td class="text-bold bg-light" style="color:#333;">${{ mov.saldo_financiero|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="10" class="text-center" style="padding: 20px;">No hay movimientos registrados en el Kárdex para este producto.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

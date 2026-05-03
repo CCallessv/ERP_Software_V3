@@ -7,18 +7,55 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
+           
             <form hx-post="{% if categoria %}{% url 'editar_categoria' categoria.pk %}{% else %}{% url 'crear_categoria' %}{% endif %}" 
-                  autocomplete="off">
+                hx-target="closest .modal-content" 
+                hx-select=".modal-content"
+                hx-swap="outerHTML"
+                autocomplete="off">
                 {% csrf_token %}
                 
                 <div class="modal-body">
+                  
+                    <!-- Aquí saldrá el error de "No puedes inactivar esta categoría porque tiene X productos asociados" -->
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label class="form-label required">Nombre de la Categoría</label>
                         {{ form.nombre }}
+                        
+                        <!-- Aquí saldrán los errores de duplicados o nombres demasiado cortos/basura -->
+                        {% if form.nombre.errors %}
+                            <div class="text-danger mt-1 small">
+                                {{ form.nombre.errors|striptags }}
+                            </div>
+                        {% endif %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Descripción</label>
                         {{ form.descripcion }}
+                        {% if form.descripcion.errors %}
+                            <div class="text-danger mt-1 small">
+                                {{ form.descripcion.errors|striptags }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Campo de Estado (Activo/Inactivo) -->
+                    <div class="mb-3">
+                        <label class="form-check form-switch">
+                            {{ form.estado }}
+                            <span class="form-check-label">Categoría Activa</span>
+                        </label>
+                        {% if form.estado.errors %}
+                            <div class="text-danger mt-1 small">
+                                {{ form.estado.errors|striptags }}
+                            </div>
+                        {% endif %}
                     </div>
                     
                     {% for hidden in form.hidden_fields %}

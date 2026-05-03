@@ -1,4 +1,6 @@
 import json
+import calendar
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict
 from django.contrib import messages
@@ -32,24 +34,24 @@ from .forms import (
     ProveedorForm,
     CategoriaForm,
     ClienteForm,
-    PresentacionForm,
     CompraForm,
     DetalleCompraForm,
     AjusteInventarioForm,
-    SolicitudAccesoForm
+    SolicitudAccesoForm,
+    
     
 )
 from .models import (
     Producto,
     Categoria,
     Proveedor,
-    PresentacionProducto,
     Compra,
     DetalleCompra,
     Venta,
     Cliente,
     DetalleVenta,
     AjusteInventario,
+    MovimientoInventario,
 )
 
 def es_administrador(user):
@@ -72,88 +74,77 @@ class CustomLoginView(LoginView):
 @user_passes_test(es_administrador)
 def home(request):
     hoy = timezone.now()
-    mes_actual = hoy.month
-    anio_actual = hoy.year
 
-    # 2. Valor del Inventario
-    inventario = Producto.objects.aggregate(
-        valor_total=Sum(F('stock') * F('precio_costo')) 
-    )
+    # 1. Capturar filtros de la URL (GET). Si no hay, usa el actual.
+    try:
+        mes_seleccionado = int(request.GET.get('mes', hoy.month))
+        anio_seleccionado = int(request.GET.get('anio', hoy.year))
+    except ValueError:
+        mes_seleccionado = hoy.month
+        anio_seleccionado = hoy.year
+
+    # Obtener el último día del mes seleccionado para el gráfico
+    _, ultimo_dia = calendar.monthrange(anio_seleccionado, mes_seleccionado)
+
+    # 2. Valor del Inventario (Global, no depende del mes)
+    inventario = Producto.objects.aggregate(valor_total=Sum(F('stock') * F('precio_costo')))
     valor_inventario = inventario['valor_total'] or 0
 
-    # 3. Ventas del PerIodo
+    # 3. Ventas del Periodo (CORRECCIÓN: uso de __iexact)
     ventas_mes = Venta.objects.filter(
-        fecha_hora_emision__month=mes_actual,
-        fecha_hora_emision__year=anio_actual,
-        estado='sellada'
+        fecha_hora_emision__year=anio_seleccionado,
+        fecha_hora_emision__month=mes_seleccionado,
+        estado__iexact='sellada' 
     )
     total_ventas = ventas_mes.aggregate(total=Sum('total_pagar'))['total'] or 0
     cantidad_ventas = ventas_mes.count()
+    estados_validos_compra = ['recibida', 'parcial', 'ajustada']
 
-    # 3.5 Compras del PerIodo
     compras_mes = Compra.objects.filter(
-        fecha_compra__month=mes_actual,
-        fecha_compra__year=anio_actual,
-        estado='completada'
-    )
+    fecha_compra__year=anio_seleccionado,
+    fecha_compra__month=mes_seleccionado,
+    estado__in=estados_validos_compra # Cambiamos iexact por __in
+)
     total_compras = compras_mes.aggregate(total_suma=Sum('total'))['total_suma'] or 0
     cantidad_compras = compras_mes.count()
 
-   # 4. Alertas de Stock Bajo (Dinámico)
-    # Buscamos productos activos donde el stock sea menor o igual a SU PROPIO stock mínimo
+    # 4. Alertas de Stock Bajo (Global)
     alertas_query = Producto.objects.filter(activo=True, stock__lte=F('stock_minimo'))
-    
-    # Contamos el total para la tarjeta de arriba
     stock_bajo = alertas_query.count()
-    
-    # Sacamos solo los primeros 5 para la lista (para no saturar la pantalla)
     productos_alerta = alertas_query.order_by('stock')[:5]
 
-    # 5. Últimas Transacciones (Optimizadas con JOIN)
+    # 5. Últimas Transacciones
     ultimas_ventas = Venta.objects.filter(
-        estado='sellada'
+        estado__iexact='sellada'
     ).select_related('cliente').order_by('-fecha_hora_emision')[:5]
 
     # =========================================================
-    # 6. TENDENCIA DE 30 DÍAS (Optimizado en Memoria)
+    # 6. TENDENCIA (Acoplado al mes y año seleccionado)
     # =========================================================
-    fecha_inicio_tendencia = hoy - timedelta(days=30)
-
-    # 6.1 Traemos SOLO las dos columnas que necesitamos (Ahorro masivo de RAM)
-    ventas = Venta.objects.filter(
-        fecha_hora_emision__gte=fecha_inicio_tendencia,
-        estado='sellada'
-    ).values('fecha_hora_emision', 'total_pagar')
-    
+    ventas_chart = ventas_mes.values('fecha_hora_emision', 'total_pagar')
     dict_ventas = defaultdict(float)
-    for v in ventas:
+    for v in ventas_chart:
         if v['fecha_hora_emision']:
             dia_str = v['fecha_hora_emision'].strftime('%Y-%m-%d')
             dict_ventas[dia_str] += float(v['total_pagar'])
 
-    # 6.2 Lo mismo para compras
-    compras = Compra.objects.filter(
-        fecha_compra__gte=fecha_inicio_tendencia,
-        estado='completada'
-    ).values('fecha_compra', 'total')
-    
+    compras_chart = compras_mes.values('fecha_compra', 'total')
     dict_compras = defaultdict(float)
-    for c in compras:
+    for c in compras_chart:
         if c['fecha_compra']:
             dia_str = c['fecha_compra'].strftime('%Y-%m-%d')
             dict_compras[dia_str] += float(c['total'])
 
-    # 6.3 Construimos el arreglo perfecto de 30 días
     meses_es = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-    
     chart_labels = []
     chart_ventas = []
     chart_compras = []
 
-    for i in range(30, -1, -1):
-        dia = hoy - timedelta(days=i)
-        dia_iso = dia.strftime('%Y-%m-%d')          
-        dia_display = f"{dia.day} {meses_es[dia.month]}" 
+    # Iteramos exactamente sobre los días del mes seleccionado
+    for dia in range(1, ultimo_dia + 1):
+        fecha_actual = date(anio_seleccionado, mes_seleccionado, dia)
+        dia_iso = fecha_actual.strftime('%Y-%m-%d')
+        dia_display = f"{dia} {meses_es[mes_seleccionado]}" 
 
         chart_labels.append(dia_display)
         chart_ventas.append(dict_ventas.get(dia_iso, 0.0))
@@ -171,20 +162,32 @@ def home(request):
         'chart_labels': json.dumps(chart_labels),
         'chart_ventas': json.dumps(chart_ventas),
         'chart_compras': json.dumps(chart_compras),
+        # Variables para mantener seleccionado el filtro en el HTML
+        'mes_actual': mes_seleccionado,
+        'anio_actual': anio_seleccionado,
     }
     
     return render(request, 'core/home.html', context)
 
 @login_required
 def recepciones_list(request):
-    # El bodeguero solo ve lo que viene en camino o lo que ya recibió
-    compras_entrantes = Compra.objects.filter(estado__in=['en_transito', 'parcial', 'recibida', 'ajustada']).order_by('-fecha_compra', '-id')
-    return render(request, 'core/recepciones_list.html', {'compras': compras_entrantes})
+    
+    compras_entrantes = Compra.objects.select_related('proveedor').filter(
+        estado__in=['en_transito', 'parcial', 'recibida', 'ajustada']
+    ).order_by('-fecha_compra', '-id')
+    
+    paginator = Paginator(compras_entrantes, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
 
+    context = {
+        'compras': page_obj,  
+        'page_obj': page_obj, 
+    }
+    return render(request, 'core/recepciones_list.html', context)
 
 @login_required
 def recepcion_detalle(request, id_publico):
-    # 1. CORRECCIÓN: Agregamos 'recibida' a la lista para evitar el 404 al ver el historial
+    #  Agregamos 'recibida' a la lista para evitar el 404 al ver el historial
     compra = get_object_or_404(Compra, id_publico=id_publico, estado__in=['en_transito', 'parcial', 'recibida'])
     detalles = compra.detalles.all()
     
@@ -193,7 +196,7 @@ def recepcion_detalle(request, id_publico):
         d.ya_recibido = d.cantidad_recibida if d.cantidad_recibida else 0
         d.pendiente = d.cantidad - d.ya_recibido
 
-    # 2. SEGURIDAD: Solo procesamos el formulario si la compra AÚN admite mercadería
+    # 2. SEGURIDAD: Solo procesamos el formulario si la compra AUN admite mercaderia
     if request.method == 'POST' and compra.estado in ['en_transito', 'parcial']:
         try:
             with transaction.atomic():
@@ -207,37 +210,42 @@ def recepcion_detalle(request, id_publico):
                         nueva_entrega = Decimal(nueva_entrega_str)
                         
                         if nueva_entrega > 0:
-                            producto = detalle.producto
                             
-                            # Matemática de costos
-                            stock_total_futuro = producto.stock + nueva_entrega
-                            nuevo_costo = ((producto.stock * producto.precio_costo) + (nueva_entrega * detalle.precio_unitario)) / stock_total_futuro
+                            #  delegamos TODO al Kardex
+                            MovimientoInventario.objects.create(
+                                producto=detalle.producto,
+                                tipo='entrada_compra',
+                                cantidad=nueva_entrega,
+                                costo_unitario=detalle.precio_unitario,
+                                referencia=f"Doc. Prov: {compra.numero_comprobante}",
+                                usuario=request.user,
+                                notas="Ingreso a bodega desde recepción."
+                            )
                             
-                            producto.precio_costo = nuevo_costo.quantize(Decimal('0.01'))
-                            producto.stock += nueva_entrega
-                            producto.save()
                             
-                            # Acumulamos lo recibido
                             if detalle.cantidad_recibida is None:
                                 detalle.cantidad_recibida = 0
                             detalle.cantidad_recibida += nueva_entrega
                             detalle.save()
 
-                    # Verificamos si aún queda saldo pendiente
-                    if detalle.cantidad_recibida < detalle.cantidad:
+                    
+                    if (detalle.cantidad_recibida or 0) < detalle.cantidad:
                         hay_faltante_todavia = True
 
                 # Sellar o mantener abierta
                 compra.estado = 'parcial' if hay_faltante_todavia else 'recibida'
                 compra.save()
                 
-                messages.success(request, "Ingreso procesado. El stock y los costos se actualizaron.")
+                messages.success(request, "Ingreso procesado. El Kárdex actualizó el stock y los costos automáticamente.")
                 return redirect('recepciones_list')
                 
         except Exception as e:
-            messages.error(request, f"Error: {e}")
-
-    return render(request, 'core/recepcion_detalle.html', {'compra': compra, 'detalles': detalles})
+            messages.error(request, f"Error crítico de inventario: {e}")
+    context = {
+        'compra': compra,
+        'detalles': detalles,
+    }
+    return render(request, 'core/recepcion_detalle.html', context)
 def exit(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
@@ -255,7 +263,7 @@ def clientes_list(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     
-    # Si la petición es de HTMX y NO es para abrir el modal (ej. buscador o paginación)
+   
     if request.headers.get('HX-Request') and request.headers.get('HX-Target') == 'tabla-clientes-body':
         return render(request, 'core/partials/clientes_rows.html', {'page_obj': page_obj})
         
@@ -425,7 +433,7 @@ def proveedor_list(request: HttpRequest) -> HttpResponse:
             Q(contacto_nombre__icontains=busqueda)
         )
     
-    # 3. Paginación (¡Crucial para no colgar la base de datos con 5000 proveedores!)
+    
     paginator = Paginator(proveedores, 10) # 10 por página
     page_obj = paginator.get_page(request.GET.get('page'))
     
@@ -441,8 +449,7 @@ def proveedor_list(request: HttpRequest) -> HttpResponse:
     }
     
     # 5. La magia de HTMX para la búsqueda/paginación
-    # Si la petición es de HTMX y viene del buscador o paginador (no del modal)
-    if request.headers.get('HX-Request') and request.headers.get('HX-Target') == 'tabla-proveedores-body':
+    if request.headers.get('HX-Request'):
         return render(request, 'core/partials/proveedor_table_rows.html', context)
         
     return render(request, 'core/proveedor_list.html', context)
@@ -557,48 +564,6 @@ def eliminar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
         return response
     return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})
 
-
-def gestionar_presentaciones(request: HttpRequest, pk: int) -> HttpResponse:
-    producto = get_object_or_404(Producto, pk=pk)
-    presentaciones = producto.presentaciones.filter(activo=True)
-    if request.method == 'POST':
-        form = PresentacionForm(request.POST)
-        if form.is_valid():
-            nueva_presentacion = form.save(commit=False)
-            nueva_presentacion.producto = producto
-            nueva_presentacion.save()
-            form = PresentacionForm()
-    else:
-        form = PresentacionForm()
-    return render(request, 'core/partials/presentaciones_modal.html', {
-        'producto': producto,
-        'presentaciones': presentaciones,
-        'form': form
-    })
-
-@login_required
-@user_passes_test(es_administrador)
-def cargar_presentaciones(request):
-    producto_id = request.GET.get('producto')
-    
-    if producto_id:
-        producto = get_object_or_404(Producto, id=producto_id)
-        presentaciones = producto.presentaciones.filter(activo=True)
-        
-        # Inyectamos el cálculo dinámico: ¿Cuántas de esta presentación podemos armar?
-        for p in presentaciones:
-            if p.factor_conversion > 0:
-                # Usamos int() para no mostrar que alcanza para "2.5 Cajas". O te alcanza para la caja entera o no.
-                p.stock_real_calculado = int(producto.stock / p.factor_conversion) 
-            else:
-                p.stock_real_calculado = 0
-
-        return render(request, 'core/partials/opciones_presentacion.html', {
-            'producto': producto,
-            'presentaciones': presentaciones
-        })
-        
-    return HttpResponse('<option value="base">Unidad Base</option>')
 
 @require_POST
 @user_passes_test(es_administrador)
@@ -763,9 +728,14 @@ def compra_confirmar(request: HttpRequest, id_publico) -> HttpResponse:
 @login_required
 @user_passes_test(es_administrador)
 def compra_list(request: HttpRequest) -> HttpResponse:
-    compras = Compra.objects.select_related('proveedor').all()
+
+
+    compras = Compra.objects.select_related('proveedor').all().order_by('-fecha_compra', '-id')
+    paginator = Paginator(compras, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
     context = {
-        'compras': compras
+        'compras': page_obj,
+        'page_obj': page_obj,
     }
     return render(request, 'core/compra_list.html', context)
 
@@ -883,7 +853,6 @@ def venta_agregar_producto(request, codigo_generacion):
         return HttpResponse("Error: Factura sellada.")
         
     producto_id = request.POST.get('producto')
-    presentacion_id = request.POST.get('presentacion') 
     
     try:
         cantidad_entrante = Decimal(request.POST.get('cantidad', 0))
@@ -892,30 +861,21 @@ def venta_agregar_producto(request, codigo_generacion):
         return HttpResponse("Error: Valores numéricos inválidos.")
         
     producto = get_object_or_404(Producto, id=producto_id)
-    presentacion = None
-    factor = Decimal('1.00')
     precio_base = producto.precio_venta
 
-    # Extraemos valores si hay presentación
-    if presentacion_id and presentacion_id != 'base':
-        presentacion = get_object_or_404(PresentacionProducto, id=presentacion_id, producto=producto)
-        factor = presentacion.factor_conversion
-        precio_base = presentacion.precio_venta
-
-    # 1. Buscamos si ya existe ANTES de validar el stock
+    # 1. Buscamos si ya existe ANTES de validar el stock 
     detalle_existente = DetalleVenta.objects.filter(
         venta=venta,
-        producto=producto,
-        presentacion=presentacion
+        producto=producto
     ).first()
 
-    # 2. Calculamos la cantidad total real que terminaría en la factura
+    # 2. Calculamos la cantidad total real que terminaria en la factura
     cantidad_total_visual = cantidad_entrante
     if detalle_existente:
         cantidad_total_visual += detalle_existente.cantidad
 
-    # 3. Matemática de stock: Convertimos esa cantidad visual a la unidad base del Kárdex
-    cantidad_total_a_descontar = cantidad_total_visual * factor
+    # 3. Matematica de stock: Como ya no hay presentaciones, la cantidad visual es la real
+    cantidad_total_a_descontar = cantidad_total_visual
 
     # 4. Validamos el total acumulado contra lo que realmente hay en bodega
     if cantidad_total_a_descontar > producto.stock:
@@ -934,11 +894,11 @@ def venta_agregar_producto(request, codigo_generacion):
         detalle_existente.descuento += descuento_entrante
         detalle_existente.save()
     else:
+        # Creación limpia, sin el campo presentacion
         DetalleVenta.objects.create(
             venta=venta,
             producto=producto,
-            presentacion=presentacion,
-            cantidad=cantidad_entrante,         
+            cantidad=cantidad_entrante,        
             precio_unitario=precio_real,
             descuento=descuento_entrante,
             tipo_afectacion='gravada'
@@ -980,7 +940,9 @@ def venta_detalle(request, codigo_generacion):
     }
     return render(request, 'core/venta_detalle.html', context)
 
+
 @require_POST
+@login_required
 @user_passes_test(es_administrador)
 def venta_sellar(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
@@ -997,27 +959,28 @@ def venta_sellar(request, codigo_generacion):
     try:
         with transaction.atomic():
             for detalle in detalles:
-                # 1. BLOQUEO DE FILA: Nadie toca este producto hasta que terminemos
-                producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
+                # 1. Ya no hay presentaciones, la cantidad ingresada es exactamente la cantidad a descontar
+                descuento_real_inventario = detalle.cantidad
                 
-                factor = detalle.presentacion.factor_conversion if detalle.presentacion else Decimal('1.00')
-                descuento_real_inventario = detalle.cantidad * factor
-                
-                # 3. Validación de última hora (por si el stock bajó mientras el cajero dudaba)
-                if descuento_real_inventario > producto.stock:
-                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Se intentó descontar {descuento_real_inventario} lb, pero solo hay {producto.stock} lb.")
-                
-                # 4. Descuento real y guardado
-                producto.stock -= descuento_real_inventario
-                producto.save()
+                # 2. CREAMOS EL MOVIMIENTO. El modelo Kárdex validará negativos y restará el stock.
+                MovimientoInventario.objects.create(
+                    producto=detalle.producto,
+                    tipo='salida_venta',
+                    cantidad=descuento_real_inventario, 
+                    costo_unitario=detalle.producto.precio_costo,
+                    referencia=f"{venta.tipo_documento} - {str(venta.codigo_generacion)[:8]}",
+                    usuario=request.user,
+                    notas="Venta registrada y descontada automáticamente."
+                )
             
-            # 5. Marcamos la factura como procesada
+            # 3. Marcamos la venta como finalizada
             venta.estado = 'sellada' 
             venta.save()
             
-            messages.success(request, 'Factura sellada. Inventario actualizado correctamente usando factores de conversión.')
+            messages.success(request, 'Factura sellada. Kárdex actualizado con rastro de auditoría exacto.')
             
     except ValueError as e:
+        # Atrapa el error de "Stock en negativo" si se intenta vender más de lo que hay
         messages.error(request, str(e))
     except Exception as e:
         messages.error(request, f"Error crítico en el sellado: {str(e)}")
@@ -1053,7 +1016,14 @@ def generar_pdf_venta(request, codigo_generacion):
 @login_required
 def ajuste_list(request):
     ajustes = AjusteInventario.objects.select_related('producto', 'usuario').all()
-    return render(request, 'core/ajuste_list.html', {'ajustes': ajustes})
+    paginator = Paginator(ajustes, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    context = {
+        'ajustes': page_obj,
+        'page_obj': page_obj,
+    }
+
+    return render(request, 'core/ajuste_list.html', context)
 
 @login_required
 def crear_ajuste(request):
@@ -1061,15 +1031,35 @@ def crear_ajuste(request):
         form = AjusteInventarioForm(request.POST)
         if form.is_valid():
             try:
-                ajuste = form.save(commit=False)
-                ajuste.usuario = request.user
-                ajuste.save() # El modelo actualizará el stock automáticamente
-                messages.success(request, f"Ajuste registrado: {ajuste.get_tipo_display()} aplicado al Kardex.")
-                # Asegúrate de importar HttpResponseClientRefresh de django_htmx si usas HTMX, o simplemente recarga
+                with transaction.atomic():
+                    # 1. Guardamos el documento del ajuste (SIN MATEMÁTICAS AQUÍ)
+                    ajuste = form.save(commit=False)
+                    ajuste.usuario = request.user
+                    ajuste.save() 
+                    
+                    # 2. Traducimos el tipo de ajuste al idioma del Kárdex
+                
+                    tipo_kardex = 'ajuste_entrada' if ajuste.tipo == 'entrada' else 'ajuste_salida'
+
+                    # 3. Disparamos el motor del Kárdex. ÉL hará la suma/resta por nosotros
+                    MovimientoInventario.objects.create(
+                        producto=ajuste.producto,
+                        tipo=tipo_kardex,
+                        cantidad=ajuste.cantidad,
+                        costo_unitario=ajuste.producto.precio_costo,
+                        referencia=f"Ajuste - Motivo: {ajuste.motivo}",
+                        usuario=request.user,
+                        notas="Generado automáticamente desde el módulo de Ajustes"
+                    )
+
+                messages.success(request, f"Ajuste registrado. El Kárdex ha actualizado el stock.")
                 return redirect('ajuste_list')
+                
             except ValueError as e:
-                # Captura el error si el stock queda en negativo
+                # Si el Kárdex detecta que el stock queda en negativo, lanzará el error aquí
                 messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, f"Error al procesar el ajuste: {str(e)}")
         else:
             messages.error(request, "Revisa los datos del formulario.")
     else:
@@ -1172,77 +1162,20 @@ def registrar_pago_factura(request, codigo_generacion):
     return redirect('cxc_list')
 
 
+
+
 @login_required
 def kardex_detalle(request, producto_id):
     producto = get_object_or_404(Producto, id=producto_id)
     
-    # 1. Traer Salidas (Ventas Selladas)
-    # Extraemos los detalles de venta que pertenecen a facturas selladas
-    salidas_venta = DetalleVenta.objects.filter(
-        producto=producto, 
-        venta__estado='sellada'
-    ).select_related('venta')
-
-    # 2. Traer Entradas (Compras)
-    entradas_compra = DetalleCompra.objects.filter(
-        producto=producto
-    ).select_related('compra')
-
-    # 3. Traer Ajustes de Inventario
-    ajustes = AjusteInventario.objects.filter(producto=producto)
-
-    # --- UNIFICACIÓN DE DATOS ---
-    movimientos = []
-
-    for salida in salidas_venta:
-        movimientos.append({
-            'fecha': salida.venta.fecha_hora_emision,
-            'origen': 'Venta',
-            'documento': f"{salida.venta.tipo_documento} - {str(salida.venta.codigo_generacion)[:8]}",
-            'entrada': 0,
-            'salida': salida.cantidad,
-            'usuario': "Sistema (Facturación)"
-        })
-
-    for entrada in entradas_compra:
-        # Solo mostrar en Kardex las compras que YA pasaron por bodega
-        if entrada.compra.estado == 'recibida':
-            # Intentar usar la cantidad_recibida, si es None (no existe), usar la original
-            cantidad_real_ingresada = entrada.cantidad_recibida if entrada.cantidad_recibida is not None else entrada.cantidad
-            
-            movimientos.append({
-                'fecha': entrada.compra.fecha_compra, 
-                'origen': 'Compra',
-                'documento': f"Doc. Prov: {entrada.compra.numero_comprobante}",
-                'entrada': cantidad_real_ingresada, # <--- Ahora usamos la variable validada
-                'salida': 0,
-                'usuario': "Sistema (Bodega)"
-            })
-
-    for ajuste in ajustes:
-        # Asumimos que tu modelo AjusteInventario tiene un campo de fecha o creacion
-        movimientos.append({
-            'fecha': ajuste.id, # IMPORTANTE: Si tu modelo Ajuste no tiene fecha, usa un campo que tengas. Idealmente deberías tener un auto_now_add.
-            'origen': 'Ajuste Manual',
-            'documento': ajuste.motivo,
-            'entrada': ajuste.cantidad if ajuste.tipo == 'ingreso' else 0,
-            'salida': ajuste.cantidad if ajuste.tipo == 'egreso' else 0,
-            'usuario': ajuste.usuario.username if hasattr(ajuste, 'usuario') else "Administrador"
-        })
-
-    # Ordenamos todos los movimientos por fecha (del más antiguo al más reciente)
-    # Nota: Asegúrate de que todos los campos 'fecha' existan en tus modelos.
-    try:
-        movimientos.sort(key=lambda x: x['fecha'])
-    except Exception:
-        pass # Si hay un error mezclando datetime y date, lo saltamos por seguridad básica
+    # Simplemente traemos el historial puro y duro de la base de datos
+    movimientos = MovimientoInventario.objects.filter(producto=producto).order_by('-fecha')
 
     context = {
         'producto': producto,
         'movimientos': movimientos,
     }
-    return render(request, 'core/kardex_detalle.html', context)    
-
+    return render(request, 'core/kardex_detalle.html', context)
 
 @login_required
 def kardex_list(request):
@@ -1256,7 +1189,12 @@ def kardex_list(request):
     # Valorización del inventario (¿Cuánto dinero tenemos en la bodega a precio de costo?)
     valor_total_bodega = sum(p.stock * p.precio_costo for p in productos)
 
+    # Lógica de paginación
+    paginator = Paginator(productos, 10) 
+    page_obj = paginator.get_page(request.GET.get('page'))
+
     context = {
+        'page_obj': page_obj,
         'productos': productos,
         'productos_criticos': productos_criticos,
         'valor_total_bodega': valor_total_bodega,
@@ -1276,4 +1214,67 @@ def solicitar_acceso(request):
     
     return render(request, 'core/solicitar_acceso.html', {'formulario': formulario})    
 
+@login_required
+def kardex_imprimir_pdf(request, producto_id):
+    producto = get_object_or_404(Producto, id=producto_id)
     
+    movimientos_db = MovimientoInventario.objects.filter(producto=producto).order_by('fecha', 'id')
+    
+    # 2. SIMULACIÓN DEL KÁRDEX EN MEMORIA
+    saldo_fisico_acumulado = Decimal('0.00')
+    saldo_financiero_acumulado = Decimal('0.00')
+    movimientos_procesados = []
+
+    for mov in movimientos_db:
+        # Extraemos el costo y calculamos el valor total del movimiento
+        
+        costo_u = mov.costo_unitario if mov.costo_unitario else Decimal('0.00')
+        valor_movimiento = mov.cantidad * costo_u
+
+        if 'entrada' in mov.tipo:
+            saldo_fisico_acumulado += mov.cantidad
+            saldo_financiero_acumulado += valor_movimiento
+        elif 'salida' in mov.tipo:
+            saldo_fisico_acumulado -= mov.cantidad
+            saldo_financiero_acumulado -= valor_movimiento
+            
+        # Protegemos contra divisiones por cero (aunque en salidas el costo promedio no cambia)
+        if saldo_fisico_acumulado > 0:
+             costo_promedio_momento = saldo_financiero_acumulado / saldo_fisico_acumulado
+        else:
+             costo_promedio_momento = Decimal('0.00')
+
+        # Inyectamos los saldos calculados al objeto antes de mandarlo a la plantilla
+        movimientos_procesados.append({
+            'fecha': mov.fecha,
+            'tipo_display': mov.get_tipo_display(),
+            'referencia': mov.referencia,
+            'es_entrada': 'entrada' in mov.tipo,
+            'es_salida': 'salida' in mov.tipo,
+            'cantidad': mov.cantidad,
+            'costo_unitario': costo_u,
+            'valor_movimiento': valor_movimiento,
+            'saldo_fisico': saldo_fisico_acumulado,
+            'costo_promedio': costo_promedio_momento,
+            'saldo_financiero': saldo_financiero_acumulado,
+        })
+    
+    context = {
+        'producto': producto,
+        'movimientos': movimientos_procesados, 
+        'fecha_impresion': timezone.now(),
+        'usuario_solicitante': request.user
+    }
+    
+    template = get_template('core/kardex_pdf.html')
+    html = template.render(context)
+    
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Kardex_{producto.codigo}.pdf"'
+    
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse(f'Error generando PDF: <pre>{html}</pre>')
+        
+    return response    
+

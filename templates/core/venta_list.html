@@ -51,6 +51,7 @@
                     <thead>
                         <tr>
                             <th>ID Transacción</th>
+                            <th>FECHA</th>
                             <th>Cliente</th>
                             <th>Tipo Documento</th>
                             <th>Estado</th>
@@ -62,6 +63,7 @@
                         {% for venta in ventas %}
                         <tr>
                             <td><span class="text-muted">{{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}...</span></td>
+                            <td>{{ venta.fecha_hora_emision|date:"d/m/Y H:i" }}</td>
                             <td class="fw-bold">{{ venta.cliente.nombres }}</td>
                             <td>{{ venta.get_tipo_documento_display|default:venta.tipo_documento }}</td>
                             <td>

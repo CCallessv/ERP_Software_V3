@@ -1,6 +1,23 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    body, html {
+        overflow-x: hidden !important;
+        max-width: 100vw;
+    }
+    .page-wrapper {
+        min-width: 0 !important;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    .chart-container-strict {
+        position: relative;
+        height: 350px;
+        width: 100%;
+        max-width: 100%;
+    }
+  </style>
 <div class="container-xl">
     <div class="page-header d-print-none">
         <div class="row align-items-center">
@@ -49,6 +66,7 @@
                 {% include 'core/partials/categoria_table_rows.html' %}
             </div>
         </div>
+        {% include 'core/partials/paginacion.html' with page_obj=page_obj %}
     </div>
 </div>
 {% endblock %}

@@ -1,8 +1,7 @@
 from django import forms
 import re
 from .models import (
-    Cliente, Producto, Proveedor, Categoria, 
-    PresentacionProducto, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,
+    Cliente, Producto, Proveedor, Categoria, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,
 )
 from decimal import Decimal
 from django.core.exceptions import ValidationError
@@ -269,30 +268,61 @@ class ProveedorForm(forms.ModelForm):
         return dias
 
 
-# === FORMULARIO DE CATEGORÍAS ===
+#Categoria Formulario
+
 class CategoriaForm(forms.ModelForm):
     class Meta:
         model = Categoria
         fields = ['nombre', 'descripcion', 'estado']
         widgets = {
-            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+            'nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Abarrotes'}),
             'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'estado': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-# === FORMULARIO DE PRESENTACIONES ===
-class PresentacionForm(forms.ModelForm):
-    class Meta:
-        model = PresentacionProducto
-        fields = ['nombre', 'codigo_barras', 'factor_conversion', 'precio_venta']
+    def clean_nombre(self):
+        nombre = self.cleaned_data.get('nombre', '')
+        nombre_limpio = nombre.strip().upper() 
         
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field_name, field in self.fields.items():
-            field.widget.attrs['class'] = 'form-control'
+        # 1. Blindaje contra nombres basura (Longitud)
+        if len(nombre_limpio) < 3:
+            raise forms.ValidationError("El nombre es demasiado corto. Usa al menos 3 caracteres.")
+            
+        # 2. Blindaje contra solo numeros o simbolos (Debe tener letras)
+        if not re.search(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ]', nombre_limpio):
+            raise forms.ValidationError("El nombre debe contener letras, no solo números o símbolos.")
+            
+        # 3. Blindaje contra duplicados exactos
+        query = Categoria.objects.filter(nombre__iexact=nombre_limpio)
+        if self.instance.pk:
+            query = query.exclude(pk=self.instance.pk)
+            
+        if query.exists():
+            raise forms.ValidationError("Ya existe una categoría registrada con este nombre.")
+            
+        return nombre_limpio
+
+    def clean_descripcion(self):
+        descripcion = self.cleaned_data.get('descripcion', '')
+        if descripcion:
+            descripcion = descripcion.strip()
+            # 4. Blindaje contra descripciones excesivas
+            if len(descripcion) > 255:
+                raise forms.ValidationError("La descripción es demasiado larga (máximo 255 caracteres).")
+        return descripcion
+
+    def clean_estado(self):
+        estado = self.cleaned_data.get('estado')
         
-        self.fields['factor_conversion'].widget.attrs.update({'min': '0.0001', 'step': '0.0001'})
-        self.fields['precio_venta'].widget.attrs.update({'min': '0.00', 'step': '0.01'})
+        # 5. Blindaje : Proteger dependencias al inactivar
+        if self.instance.pk and not estado:
+            
+            if self.instance.productos.exists():
+                cantidad = self.instance.productos.count()
+                raise forms.ValidationError(f"No puedes inactivar esta categoría porque tiene {cantidad} producto(s) asociado(s). Reasigna los productos primero.")
+                
+        return estado
+
 
 # === FORMULARIO DE COMPRAS ===
 class CompraForm(forms.ModelForm):

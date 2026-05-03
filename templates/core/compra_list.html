@@ -63,10 +63,18 @@
                         <td>
                             {% if compra.estado == 'borrador' %}
                                 <span class="badge bg-warning text-warning-fg">Borrador</span>
-                            {% elif compra.estado == 'completada' %}
-                                <span class="badge bg-success text-success-fg">Completada</span>
+                            {% elif compra.estado == 'en_transito' %}
+                                <span class="badge bg-info text-info-fg">En Tránsito</span>
+                            {% elif compra.estado == 'recibida' %}
+                                <span class="badge bg-success text-success-fg">Recibida en Bodega</span>
+                            {% elif compra.estado == 'parcial' %}
+                                <span class="badge bg-orange text-orange-fg">Recibida Parcial</span>
+                            {% elif compra.estado == 'ajustada' %}
+                                <span class="badge bg-purple text-purple-fg">Cerrada / Ajustada</span>
                             {% elif compra.estado == 'anulada' %}
                                 <span class="badge bg-danger text-danger-fg">Anulada</span>
+                            {% else %}
+                                <span class="badge bg-secondary text-secondary-fg">{{ compra.get_estado_display }}</span>
                             {% endif %}
                         </td>
                         <td class="font-weight-bold text-green">${{ compra.total|floatformat:2 }}</td>
@@ -127,6 +135,7 @@
                 </tbody>
             </table>
         </div>
+        {% include 'core/partials/paginacion.html' with page_obj=page_obj %}
     </div>
 </div>
 {% endblock %}
