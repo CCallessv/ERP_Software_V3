@@ -188,7 +188,8 @@ def recepciones_list(request):
 @login_required
 def recepcion_detalle(request, id_publico):
     #  Agregamos 'recibida' a la lista para evitar el 404 al ver el historial
-    compra = get_object_or_404(Compra, id_publico=id_publico, estado__in=['en_transito', 'parcial', 'recibida'])
+    # Código corregido:
+    compra = get_object_or_404(Compra, id_publico=id_publico, estado__in=['en_transito', 'parcial', 'recibida', 'ajustada'])
     detalles = compra.detalles.all()
     
     # Calculamos lo que falta
@@ -246,6 +247,7 @@ def recepcion_detalle(request, id_publico):
         'detalles': detalles,
     }
     return render(request, 'core/recepcion_detalle.html', context)
+
 def exit(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')

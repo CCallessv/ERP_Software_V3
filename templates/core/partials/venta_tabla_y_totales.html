@@ -21,20 +21,22 @@
             <tbody id="tabla-detalles-venta">
                 {% for d in venta.detalles.all %}
                     <tr>
-                       
+                        <!-- CORRECCIÓN 1: Aquí faltaba imprimir el nombre del producto -->
+                        <td class="text-truncate" style="max-width: 250px;">{{ d.producto.nombre }}</td>
                         <td>{{ d.cantidad }}</td>
                         <td>${{ d.precio_unitario }}</td>
                         <td>${{ d.descuento }}</td>
                         <td>{{ d.get_tipo_afectacion_display }}</td>
                         <td class="fw-bold">${{ d.subtotal }}</td>
+                        
+                        {% if venta.estado == 'borrador' %}
                         <td>
-                            {% if venta.estado == 'borrador' %}
-                                <button hx-post="{% url 'venta_eliminar_producto' d.id %}" 
-                                        hx-include="[name='csrfmiddlewaretoken']"
-                                        hx-swap="none" 
-                                        class="btn btn-sm btn-danger btn-icon">X</button>
-                            {% endif %}
+                            <button hx-post="{% url 'venta_eliminar_producto' d.id %}" 
+                                    hx-include="[name='csrfmiddlewaretoken']"
+                                    hx-swap="none" 
+                                    class="btn btn-sm btn-danger btn-icon">X</button>
                         </td>
+                        {% endif %}
                     </tr>
                 {% empty %}
                     <tr>
@@ -69,7 +71,19 @@
             <div class="col-6 text-end">
                 <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${{ venta.sumatoria_gravadas }}</span></div>
                 <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas }}</span></div>
-                <div class="text-muted mb-2 border-bottom pb-2">IVA (13%): <span class="text-body fw-bold">${{ venta.iva }}</span></div>
+                
+                <!-- CORRECCIÓN 2: Lógica visual para CCF vs Factura -->
+                <div class="text-muted mb-2 border-bottom pb-2">
+                    IVA (13%): 
+                    <span class="text-body fw-bold">
+                        {% if venta.tipo_documento == 'ccf' %}
+                            ${{ venta.iva }}
+                        {% else %}
+                            <span class="badge bg-secondary text-secondary-fg ms-1">INCLUIDO</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
                 <h2 class="mb-0 text-success">Total: ${{ venta.total_pagar }}</h2>
             </div>
         </div>

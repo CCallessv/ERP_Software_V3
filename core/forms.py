@@ -338,7 +338,39 @@ class CompraForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['proveedor'].queryset = Proveedor.objects.filter(activo=True)        
+        self.fields['proveedor'].queryset = Proveedor.objects.filter(activo=True)    
+
+        # 1. Validación de la máquina del tiempo
+    def clean_fecha_compra(self):
+        fecha = self.cleaned_data.get('fecha_compra')
+        if fecha and fecha > date.today():
+            raise ValidationError("Auditoría fallida: No puedes registrar una compra con fecha en el futuro.")
+        return fecha
+
+    # 2. Validación cruzada (Proveedor + Factura + Año Fiscal)
+    def clean(self):
+        cleaned_data = super().clean()
+        proveedor = cleaned_data.get('proveedor')
+        numero_comprobante = cleaned_data.get('numero_comprobante')
+        fecha_compra = cleaned_data.get('fecha_compra')
+
+        if proveedor and numero_comprobante and fecha_compra:
+            # Extraemos el año para aislar la validación por ejercicio fiscal
+            año_fiscal = fecha_compra.year
+            
+            compra_duplicada = Compra.objects.filter(
+                proveedor=proveedor, 
+                numero_comprobante__iexact=numero_comprobante,
+                fecha_compra__year=año_fiscal
+            ).exclude(pk=self.instance.pk)
+            
+            if compra_duplicada.exists():
+                self.add_error(
+                    'numero_comprobante', 
+                    f"Alerta de duplicidad: El proveedor {proveedor.nombre} ya tiene la factura {numero_comprobante} registrada en el ejercicio {año_fiscal}."
+                )
+
+        return cleaned_data  
 
 # === FORMULARIO DE DETALLE DE COMPRA ===
 class DetalleCompraForm(forms.ModelForm):
@@ -353,7 +385,22 @@ class DetalleCompraForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['producto'].queryset = Producto.objects.filter(activo=True)        
+        self.fields['producto'].queryset = Producto.objects.filter(activo=True)  
+
+
+    # 1. Validacion estricta de la cantidad
+    def clean_cantidad(self):
+        cantidad = self.cleaned_data.get('cantidad')
+        if cantidad is not None and cantidad <= 0:
+            raise ValidationError("Intento de fraude o error: La cantidad debe ser estrictamente mayor a cero.")
+        return cantidad
+
+    # 2. Validacion estricta del precio
+    def clean_precio_unitario(self):
+        precio = self.cleaned_data.get('precio_unitario')
+        if precio is not None and precio < 0:
+            raise ValidationError("Error contable: El precio unitario no puede ser negativo.")
+        return precio          
 
 # === FORMULARIO DE AJUSTES DE INVENTARIO ===
 class ProductoConStockChoiceField(forms.ModelChoiceField):
