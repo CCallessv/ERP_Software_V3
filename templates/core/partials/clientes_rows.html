@@ -1,30 +1,52 @@
 {% for cliente in page_obj %}
-<tr>
-    <td><span class="text-secondary">{{ cliente.codigo|default:"--" }}</span></td>
+<!-- Si está inactivo, le bajamos la opacidad a toda la fila para que se vea "apagado" -->
+<tr class="{% if not cliente.estado %}opacity-50{% endif %}">
+    
+    <td>{{ cliente.codigo }}</td>
+    
     <td>
-        <span class="badge {% if cliente.estado %}bg-success{% else %}bg-danger{% endif %} me-1"></span>
-        {{ cliente.nombres }}
+        <!-- El punto indicador -->
+        {% if cliente.estado %}
+            <span style="color: #28a745;">●</span> <!-- Verde -->
+        {% else %}
+            <span style="color: #dc3545;">●</span> <!-- Rojo -->
+        {% endif %}
+        
+        <!-- Si está inactivo, tachamos el nombre -->
+        {% if not cliente.estado %}
+            <del>{{ cliente.nombres }}</del> <span class="badge bg-secondary">Inactivo</span>
+        {% else %}
+            {{ cliente.nombres }}
+        {% endif %}
     </td>
+    
     <td>{{ cliente.documento }}</td>
-    <td>{{ cliente.telefono|default:"--" }}</td>
+    <td>{{ cliente.telefono }}</td>
     <td>${{ cliente.limite_credito|floatformat:2 }}</td>
-    <td class="text-center">
-        <button class="btn btn-sm btn-outline-primary"
-                hx-get="{% url 'editar_cliente' cliente.pk %}"
-                hx-target="#modal-container"
-                hx-swap="innerHTML">
+    
+    <td>
+        <button class="btn btn-sm btn-outline-primary" 
+                hx-get="{% url 'editar_cliente' cliente.id %}" 
+                hx-target="#modal-container">
             Editar
         </button>
-        <button class="btn btn-sm btn-outline-danger ms-2"
-                hx-get="{% url 'eliminar_cliente' cliente.pk %}" 
-                hx-target="#modal-container"
-                hx-swap="innerHTML">
+        
+        <!-- LÓGICA DE BOTONES CONDICIONAL -->
+        {% if cliente.estado %}
+        <button class="btn btn-sm btn-outline-danger" 
+                hx-get="{% url 'eliminar_cliente' cliente.id %}" 
+                hx-target="#modal-container"> 
             Eliminar
         </button>
+        {% else %}
+            <!-- Botón verde para devolverle la vida -->
+            <button class="btn btn-sm btn-outline-success" 
+                    hx-post="{% url 'reactivar_cliente' cliente.id %}"
+                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'  
+                    hx-confirm="¿Deseas reactivar a este cliente?">
+                Reactivar
+            </button>
+        {% endif %}
     </td>
-</tr>
-{% empty %}
-<tr>
-    <td colspan="6" class="text-center py-4">No hay clientes.</td>
 </tr>
 {% endfor %}

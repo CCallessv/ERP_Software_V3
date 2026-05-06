@@ -34,6 +34,14 @@
                         </select>
                         <small class="form-hint">Asegúrate de que el cliente tenga su NIT/NRC registrado si eliges CCF.</small>
                     </div>
+                    <!-- NUEVO CAMPO: Condición de Pago -->
+                    <div class="mb-3">
+                        <label class="form-label text-danger">Condición de Pago *</label>
+                        <select name="condicion_pago" id="id_condicion_pago" class="form-select" required>
+                            <option value="contado">Contado (Pago Inmediato)</option>
+                            <option value="credito">Crédito (Cuentas por Cobrar)</option>
+                        </select>
+                    </div>
 
                 </div>
                 <div class="modal-footer">

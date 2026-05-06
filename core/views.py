@@ -28,6 +28,8 @@ from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
+from django.db.models import Sum, F, Value, DecimalField
+from django.db.models.functions import Coalesce
 
 from .forms import (
     ProductoForm,
@@ -38,6 +40,8 @@ from .forms import (
     DetalleCompraForm,
     AjusteInventarioForm,
     SolicitudAccesoForm,
+    DetalleVentaForm,
+    RegistrarPagoForm,
     
     
 )
@@ -254,18 +258,22 @@ def exit(request: HttpRequest) -> HttpResponse:
 
 @user_passes_test(es_administrador)
 def clientes_list(request: HttpRequest) -> HttpResponse:
-    search_query = request.GET.get('q', '')
-    queryset = Cliente.objects.all().order_by('-id')
+    search_query = request.GET.get('q', '').strip() # .strip() quita espacios accidentales
+    
+   
+    queryset = Cliente.objects.all().order_by('-estado', 'nombres')
     
     if search_query:
+        
         queryset = queryset.filter(
-            Q(nombres__icontains=search_query) | Q(documento__icontains=search_query)
+            Q(codigo__icontains=search_query) | 
+            Q(nombres__icontains=search_query) | 
+            Q(documento__icontains=search_query)
         )
         
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     
-   
     if request.headers.get('HX-Request') and request.headers.get('HX-Target') == 'tabla-clientes-body':
         return render(request, 'core/partials/clientes_rows.html', {'page_obj': page_obj})
         
@@ -312,7 +320,18 @@ def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
     
     if request.method == 'POST':
-        # SOFT DELETE: En lugar de destruir, inactivamos el registro
+        # 1. BLOQUEO FINANCIERO: Evitar fuga de deudores
+        # Asumiendo que usas related_name='ventas' o el default 'venta_set'
+        deudas_pendientes = cliente.venta_set.filter(estado_pago='pendiente').exists()
+        
+        if deudas_pendientes:
+            # Retornamos el modal nuevamente inyectando un mensaje de error rojo
+            return render(request, 'core/partials/modal_eliminarCliente.html', {
+                'cliente': cliente,
+                'error': "Bloqueo Financiero: Este cliente tiene facturas de crédito pendientes de pago. No puede ser inactivado."
+            })
+
+        # 2. SOFT DELETE
         cliente.estado = False
         cliente.save()
         
@@ -321,6 +340,23 @@ def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
         return response
         
     return render(request, 'core/partials/modal_eliminarCliente.html', {'cliente': cliente})
+
+@require_POST
+@user_passes_test(es_administrador)
+def reactivar_cliente(request, pk: int):
+    cliente = get_object_or_404(Cliente, pk=pk)
+    
+    # Reversión del Soft Delete
+    cliente.estado = True
+    cliente.save()
+    
+    messages.success(request, f"El cliente {cliente.nombres} ha sido reactivado.")
+    
+    # Ordenamos a HTMX recargar la tabla para que el cliente vuelva a salir arriba
+    response = HttpResponse(status=204)
+    response['HX-Refresh'] = 'true'
+    return response
+
 
 
 def productos_list(request: HttpRequest) -> HttpResponse:
@@ -568,6 +604,7 @@ def eliminar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @require_POST
+@login_required
 @user_passes_test(es_administrador)
 def venta_sellar(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
@@ -581,28 +618,84 @@ def venta_sellar(request, codigo_generacion):
         messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
         return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
+    # 1. BLOQUEO FISCAL (No lo borres)
+    if venta.tipo_documento == 'CCF':
+        if not venta.cliente.nrc or not venta.cliente.giro:
+            messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC o Giro.")
+            return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
     try:
         with transaction.atomic():
+            suma_gravadas = Decimal('0.00')
+
+            # 2. RECALCULAR PRECIOS Y DESCONTAR KÁRDEX
             for detalle in detalles:
-                # BLOQUEO DE FILA: Evita que otro cajero toque este stock en el mismo milisegundo
                 producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
                 
-                # CÁLCULO ESTRICTO: Determinar cuánto descontar realmente del Kárdex
-                factor = detalle.presentacion.factor_conversion if detalle.presentacion else Decimal('1.00')
-                descuento_real_kardex = detalle.cantidad * factor
+                precio_actual = producto.precio_venta
+                if venta.tipo_documento == 'CCF':
+                    precio_actual = (precio_actual / Decimal('1.13')).quantize(Decimal('0.01'))
                 
-                # Validar otra vez. El stock pudo cambiar desde que el cajero armó el borrador.
-                if descuento_real_kardex > producto.stock:
-                    raise ValueError(f"Stock insuficiente para {producto.nombre}. Alguien más lo facturó primero. Quedan {producto.stock} {producto.get_unidad_medida_base_display()} en bodega.")
+                detalle.precio_unitario = precio_actual
                 
-                producto.stock -= descuento_real_kardex
-                producto.save()
-            
-            venta.estado = 'sellada' 
+                subtotal_sin_descuento = detalle.cantidad * precio_actual
+                if detalle.descuento > subtotal_sin_descuento:
+                    raise ValueError(f"Fallo contable: El precio de {producto.nombre} bajó y el descuento ahora es mayor al total.")
+                
+                detalle.save()
+                
+                subtotal_linea = subtotal_sin_descuento - detalle.descuento
+                suma_gravadas += subtotal_linea
+
+                MovimientoInventario.objects.create(
+                    producto=producto,
+                    tipo='salida_venta',
+                    cantidad=detalle.cantidad, 
+                    costo_unitario=producto.precio_costo,
+                    referencia=f"{venta.tipo_documento} - {str(venta.codigo_generacion)[:8]}",
+                    usuario=request.user,
+                    notas="Venta registrada automáticamente."
+                )
+
+            # 3. DETERMINAR EL TOTAL REAL (Con los precios actualizados)
+            if venta.tipo_documento == 'CCF':
+                iva_real = (suma_gravadas * Decimal('0.13')).quantize(Decimal('0.01'))
+                total_real = suma_gravadas + iva_real
+            else:
+                iva_real = Decimal('0.00')
+                total_real = suma_gravadas
+
+            # 4. BLOQUEO DE CRÉDITO ESTRICTO
+            if venta.condicion_pago == 'credito':
+                if venta.cliente.limite_credito <= 0:
+                    raise ValueError("Este cliente no tiene crédito autorizado (Límite $0.00).")
+
+                deuda_historica = Venta.objects.filter(
+                    cliente=venta.cliente, 
+                    condicion_pago='credito', 
+                    estado='sellada', 
+                    estado_pago='pendiente'
+                ).aggregate(total_deuda=Sum('total_pagar'))['total_deuda'] or Decimal('0.00')
+
+                deuda_proyectada = deuda_historica + total_real
+
+                if deuda_proyectada > venta.cliente.limite_credito:
+                    # Al hacer raise, el Kárdex y los precios retroceden automáticamente
+                    raise ValueError(f"Riesgo Financiero: Límite ${venta.cliente.limite_credito}. Deuda pendiente ${deuda_historica}. Factura actual ${total_real.quantize(Decimal('0.01'))}. Supera el límite.")
+
+            # 5. CONSOLIDAR EL DOCUMENTO FISCAL
+            venta.sumatoria_gravadas = suma_gravadas
+            venta.iva = iva_real
+            venta.total_pagar = total_real
+            venta.estado = 'sellada'
             venta.save()
-            messages.success(request, 'Documento sellado de forma segura. Inventario actualizado.')        
+            
+            messages.success(request, 'Documento sellado con precios vigentes. Riesgo financiero evaluado y Kárdex descontado.')
+            
     except ValueError as e:
         messages.error(request, str(e))
+    except Exception as e:
+        messages.error(request, f"Error crítico en el sellado: {str(e)}")
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
@@ -799,31 +892,30 @@ def crear_venta_borrador(request):
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
+        condicion_pago = request.POST.get('condicion_pago') 
 
-        # Validación estricta
-        if not cliente_id or not tipo_documento:
+        # Validación estricta actualizada
+        if not cliente_id or not tipo_documento or not condicion_pago:
             clientes = Cliente.objects.filter(estado=True).order_by('nombres')
-            # Devolvemos el mismo modal pero con un mensaje de error inyectado
             return render(request, 'core/partials/venta_borrador_form.html', {
                 'clientes': clientes,
-                'error': "Faltan datos. Debes seleccionar un cliente y el tipo de documento."
+                'error': "Faltan datos. Debes seleccionar cliente, documento y condición de pago."
             })
 
         cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # Crear la venta
+        # Crear la venta con todos sus datos
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
-            tipo_documento=tipo_documento
+            tipo_documento=tipo_documento,
+            condicion_pago=condicion_pago 
         )
         
-        # LA CLAVE: No usamos un redirect normal de Django.
         # Le ordenamos a HTMX que cambie la URL del navegador al detalle de la venta.
         response = HttpResponse(status=204)
         response['HX-Redirect'] = reverse('venta_detalle', kwargs={'codigo_generacion': nueva_venta.codigo_generacion})
         return response
-
 
 #VENTAS
 @login_required
@@ -845,7 +937,6 @@ def venta_list(request):
     }
     return render(request, 'core/venta_list.html', context)
 
-
 @require_POST
 @user_passes_test(es_administrador)
 def venta_agregar_producto(request, codigo_generacion):
@@ -855,48 +946,45 @@ def venta_agregar_producto(request, codigo_generacion):
         return HttpResponse("Error: Factura sellada.")
         
     producto_id = request.POST.get('producto')
-    
-    try:
-        cantidad_entrante = Decimal(request.POST.get('cantidad', 0))
-        descuento_entrante = Decimal(request.POST.get('descuento', 0))
-    except Exception:
-        return HttpResponse("Error: Valores numéricos inválidos.")
-        
     producto = get_object_or_404(Producto, id=producto_id)
-    precio_base = producto.precio_venta
-
-    # 1. Buscamos si ya existe ANTES de validar el stock 
-    detalle_existente = DetalleVenta.objects.filter(
-        venta=venta,
-        producto=producto
-    ).first()
-
-    # 2. Calculamos la cantidad total real que terminaria en la factura
-    cantidad_total_visual = cantidad_entrante
-    if detalle_existente:
-        cantidad_total_visual += detalle_existente.cantidad
-
-    # 3. Matematica de stock: Como ya no hay presentaciones, la cantidad visual es la real
-    cantidad_total_a_descontar = cantidad_total_visual
-
-    # 4. Validamos el total acumulado contra lo que realmente hay en bodega
-    if cantidad_total_a_descontar > producto.stock:
-        error_msg = f"¡Bloqueo de Inventario! Intentas facturar un total de {cantidad_total_a_descontar} {producto.get_unidad_medida_base_display()}, pero solo quedan {producto.stock} en bodega."
-        # Devolvemos la tabla intacta, pero le inyectamos la variable de error
+    
+    form = DetalleVentaForm(request.POST)
+    if not form.is_valid():
+        
+        error_msg = list(form.errors.values())[0][0]
         return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta, 'error': error_msg})
+        
+    cantidad_entrante = form.cleaned_data['cantidad']
+    descuento_entrante = form.cleaned_data['descuento']
 
-    # 5. Lógica de precio e IVA
+    # 1. Logica de precio e IVA
+    precio_base = producto.precio_venta
     precio_real = precio_base
     if venta.tipo_documento == 'CCF':
         precio_real = (precio_base / Decimal('1.13')).quantize(Decimal('0.01'))
 
-    # 6. Ejecución del guardado (Agrupar vs Crear)
+    # 2. Bloqueo logico: El descuento no puede ser mayor al valor total de los productos
+    subtotal_sin_descuento = cantidad_entrante * precio_real
+    if descuento_entrante > subtotal_sin_descuento:
+        error_msg = "Error contable: El descuento supera el valor total del producto."
+        return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta, 'error': error_msg})
+
+    # 3. Validar stock acumulado
+    detalle_existente = DetalleVenta.objects.filter(venta=venta, producto=producto).first()
+    cantidad_total_visual = cantidad_entrante
+    if detalle_existente:
+        cantidad_total_visual += detalle_existente.cantidad
+
+    if cantidad_total_visual > producto.stock:
+        error_msg = f"¡Bloqueo de Inventario! Intentas facturar {cantidad_total_visual} unidades, pero solo quedan {producto.stock} en bodega."
+        return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta, 'error': error_msg})
+
+    # 4. Ejecucion del guardado
     if detalle_existente:
         detalle_existente.cantidad += cantidad_entrante
         detalle_existente.descuento += descuento_entrante
         detalle_existente.save()
     else:
-        # Creación limpia, sin el campo presentacion
         DetalleVenta.objects.create(
             venta=venta,
             producto=producto,
@@ -908,6 +996,7 @@ def venta_agregar_producto(request, codigo_generacion):
     
     venta.refresh_from_db()
     return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
+
     
 
 
@@ -1076,51 +1165,66 @@ def crear_ajuste(request):
 def anular_venta(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
 
-    if venta.estado != 'completada' and venta.estado != 'sellada': 
-        messages.error(request, "Solo puedes anular facturas que ya fueron procesadas.")
+    if venta.estado not in ['completada', 'sellada']: 
+        messages.error(request, "Solo puedes anular facturas procesadas.")
         return redirect('venta_list')
 
     if request.method == 'POST':
         try:
             with transaction.atomic(): 
-                # 1. Reversion de Inventario (Devolver al Kardex)
+                # 1. ¿HAY DINERO QUE DEVOLVER?
+                pagos = venta.pagos.all()
+                total_pagado = pagos.aggregate(total=Sum('monto'))['total'] or 0
+
+                if total_pagado > 0:
+                    # Registramos un "pago negativo" o eliminamos los pagos para limpiar la caja
+                    # En este caso, eliminamos para que el saldo de la factura no quede negativo
+                    pagos.delete()
+                    nota_pago = f" Se revirtieron ${total_pagado} de la caja."
+                else:
+                    nota_pago = ""
+
+                # 2. Reversión de Kárdex
                 for detalle in venta.detalles.all():
-                    producto = detalle.producto
-                    producto.stock += detalle.cantidad
-                    producto.save()
+                    MovimientoInventario.objects.create(
+                        producto=detalle.producto,
+                        tipo='ajuste_entrada',
+                        cantidad=detalle.cantidad,
+                        costo_unitario=detalle.producto.precio_costo,
+                        referencia=f"ANULACIÓN: {str(venta.codigo_generacion)[:8]}",
+                        usuario=request.user,
+                        notas=f"Devolución por anulación de factura.{nota_pago}"
+                    )
 
-                # ¡Adiós a la reversión de caja!
-
-                # 2. Ajuste Fiscal
+                # 3. Ajuste Contable y Fiscal
                 venta.estado = 'anulada'
-                venta.sumatoria_gravadas = 0
-                venta.sumatoria_exentas = 0
-                venta.sumatoria_no_sujetas = 0
-                venta.iva = 0
+                venta.estado_pago = 'anulado' # Asegúrate de tener este estado
                 venta.total_pagar = 0
+                # ... (resto de tus sumatorias en 0)
                 venta.save()
 
-            messages.success(request, f"Factura anulada con éxito. Inventario devuelto al Kardex.")
+            messages.success(request, f"Factura anulada.{nota_pago} Stock devuelto al Kárdex.")
         
         except Exception as e:
-            messages.error(request, f"Operación denegada: {str(e)}")
+            messages.error(request, f"Error: {str(e)}")
 
     return redirect('venta_list')
-
 
 @login_required
 @user_passes_test(es_administrador)
 def cuentas_por_cobrar_list(request):
-    # Filtramos ventas que:
-    # 1. Estén Selladas (ya son deuda real)
-    # 2. El estado de pago sea 'pendiente'
+    # Anotamos cuánto se ha pagado de cada factura restando la tabla hija 'pagos'
     pendientes = Venta.objects.filter(
         estado='sellada', 
-        estado_pago='pendiente'
+        estado_pago='pendiente',
+        condicion_pago='credito' # Bloqueo extra: Solo ventas a crédito, no vayas a meter ventas de contado trabadas.
+    ).annotate(
+        monto_abonado=Coalesce(Sum('pagos__monto'), Value(0), output_field=DecimalField()),
+        saldo_real=F('total_pagar') - F('monto_abonado')
     ).order_by('fecha_hora_emision')
 
-    # Cálculo rápido para el resumen superior
-    total_por_cobrar = sum(v.total_pagar for v in pendientes)
+    # Ahora sumamos el saldo REAL que la gente nos debe, no el total histórico
+    total_por_cobrar = sum(v.saldo_real for v in pendientes)
     conteo_facturas = pendientes.count()
 
     context = {
@@ -1135,32 +1239,57 @@ def cuentas_por_cobrar_list(request):
 @require_POST
 @user_passes_test(es_administrador)
 def registrar_pago_factura(request, codigo_generacion):
-    # BUSQUEDA SEGURA: Solo facturas selladas que aún deban dinero
-    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion, estado='sellada', estado_pago='pendiente')
-    
-    metodo = request.POST.get('metodo_pago')
-    referencia = request.POST.get('comprobante_pago', '').strip()
-    
-    # 1. Validación de seguridad: No permitimos campos vacíos en el método
-    if not metodo:
-        messages.error(request, "Error: Debes seleccionar un método de pago.")
-        return redirect('cxc_list')
-
-    # 2. Proceso de Cobro (Transaccional)
     try:
+        # Iniciamos la transacción inmediatamente para poder bloquear la fila
         with transaction.atomic():
-            venta.metodo_pago = metodo
-            # Guardamos una huella de auditoría en las observaciones para que no se pierda el dato
-            info_pago = f"\n[PAGO REGISTRADO EL {timezone.now().strftime('%d/%m/%Y %H:%M')}] - Ref: {referencia}"
-            venta.observaciones = (venta.observaciones or "") + info_pago
+            # 1. BLOQUEO DE FILA: Nadie más toca esta venta hasta que terminemos de contar el dinero
+            venta = get_object_or_404(Venta.objects.select_for_update(), codigo_generacion=codigo_generacion)
+
+            # 2. VALIDACIÓN LÓGICA
+            if venta.estado != 'sellada':
+                raise ValueError("Solo puedes registrar cobros de facturas selladas y válidas.")
+                
+            if venta.estado_pago == 'pagado':
+                raise ValueError("Error contable: Esta factura ya está liquidada al 100%.")
+
+            # 3. CÁLCULO EN TIEMPO REAL DE LA DEUDA
+            pagos_previos = venta.pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+            deuda_pendiente = venta.total_pagar - pagos_previos
+
+            # 4. INSTANCIAMOS EL FORMULARIO
+            # Pasamos la deuda_pendiente al formulario para que el clean_monto haga su trabajo
+            form = RegistrarPagoForm(request.POST, deuda_pendiente=deuda_pendiente)
             
-            venta.estado_pago = 'pagado'
-            venta.save()
-            
-            messages.success(request, f"Factura {venta.codigo_generacion|stringformat:'s'|slice:':8'} saldada con éxito.")
+            if form.is_valid():
+                nuevo_pago = form.save(commit=False)
+                nuevo_pago.venta = venta
+                nuevo_pago.registrado_por = request.user
+                nuevo_pago.save()
+
+                # 5. AUDITORÍA DEL SALDO FINAL
+                # Restamos el pago actual a la deuda que calculamos arriba
+                saldo_restante = deuda_pendiente - nuevo_pago.monto
+
+                # Si la deuda es cero (o menor por algún error de micro-centavos flotantes), cerramos la cuenta
+                if saldo_restante <= Decimal('0.00'):
+                    venta.estado_pago = 'pagado'
+                    venta.save()
+                    messages.success(request, f"Pago de ${nuevo_pago.monto} registrado. La factura ha sido liquidada en su totalidad.")
+                else:
+                    messages.success(request, f"Abono de ${nuevo_pago.monto} registrado. Saldo pendiente: ${saldo_restante.quantize(Decimal('0.01'))}.")
+                    
+            else:
+                # Si el form.is_valid() falla (ej. intentaron pagar más de lo que deben)
+                # Extraemos los errores del formulario para mostrarlos en pantalla
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, error)
+                        
+    except ValueError as e:
+        messages.error(request, str(e))
     except Exception as e:
-        messages.error(request, f"Error crítico al registrar el pago: {str(e)}")
-        
+        messages.error(request, f"Fallo crítico al procesar el pago: {str(e)}")
+
     return redirect('cxc_list')
 
 

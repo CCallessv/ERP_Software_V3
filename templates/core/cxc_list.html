@@ -41,53 +41,83 @@
                     </thead>
                     <tbody>
                         {% for venta in pendientes %}
-
-                        <div class="modal modal-blur fade" id="modal-pago-{{ venta.id }}" tabindex="-1" role="dialog" aria-hidden="true">
-                            <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">Registrar Pago: ${{ venta.total_pagar }}</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <form action="{% url 'registrar_pago' venta.codigo_generacion %}" method="POST">
-                                        {% csrf_token %}
-                                        <div class="mb-3">
-                                            <label class="form-label required">Método de Pago</label>
-                                            <select name="metodo_pago" class="form-select" required>
-                                                <option value="transferencia">Transferencia Bancaria</option>
-                                                <option value="cheque">Cheque</option>
-                                                <option value="tarjeta">Tarjeta de Crédito/Débito</option>
-                                                <option value="efectivo">Efectivo (Oficina)</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Número de Referencia</label>
-                                            <input type="text" name="comprobante_pago" class="form-control" placeholder="Ej: Transf #998877">
-                                        </div>
-                                        <button type="submit" class="btn btn-primary w-100">Confirmar Ingreso de Dinero</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
                         <tr>
                             <td class="text-muted">{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
+                            
                             <td>
                                 <div class="fw-bold">{{ venta.cliente.nombres }}</div>
                                 <div class="text-muted small">{{ venta.tipo_documento }} - {{ venta.codigo_generacion|stringformat:"s"|slice:":8" }}</div>
                             </td>
+                            
                             <td>
                                 <span class="badge {% if venta.condicion_pago == 'credito' %}bg-purple-lt{% else %}bg-azure-lt{% endif %}">
                                     {{ venta.get_condicion_pago_display }}
                                 </span>
                             </td>
+                            
                             <td>
                                 <span class="text-muted">{{ venta.dias_credito }} días plazo</span>
                             </td>
-                            <td class="fw-bold text-dark">${{ venta.total_pagar }}</td>
+                            
+                            <!-- COLUMNA DEL MONTO CORRECTAMENTE ASIGNADA -->
+                            <td class="fw-bold text-danger">${{ venta.saldo_real|floatformat:2 }}</td>
+                            
+                            <!-- ÚLTIMA CELDA: BOTÓN Y MODAL EMPAQUETADOS JUNTOS -->
                             <td>
                                 <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-pago-{{ venta.id }}">
                                     Registrar Pago
                                 </button>
+                    
+                                <!-- INICIO DEL MODAL -->
+                                <div class="modal modal-blur fade" id="modal-pago-{{ venta.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            
+                                            <!-- EL FORMULARIO ENVUELVE TODO EL CONTENIDO DEL MODAL -->
+                                            <form action="{% url 'registrar_pago_factura' venta.codigo_generacion %}" method="POST">
+                                                {% csrf_token %}
+                                                
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Registrar Pago</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                
+                                                <div class="modal-body">
+                                                    <div class="alert alert-info">
+                                                        Saldo actual de la deuda: <strong>${{ venta.saldo_real|floatformat:2 }}</strong>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold text-danger required">Monto a Recibir ($)</label>
+                                                        <input type="number" step="0.01" min="0.01" max="{{ venta.saldo_real|stringformat:'.2f' }}" name="monto" class="form-control" value="{{ venta.saldo_real|stringformat:'.2f' }}" required>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label required">Método de Pago</label>
+                                                        <select name="metodo_pago" class="form-select" required>
+                                                            <option value="efectivo">Efectivo (Oficina)</option>
+                                                            <option value="transferencia">Transferencia Bancaria</option>
+                                                            <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                                                            <option value="cheque">Cheque</option>
+                                                        </select>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Número de Referencia (Opcional)</label>
+                                                        <input type="text" name="comprobante_pago" class="form-control" placeholder="Ej: Transf #998877">
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                    <button type="submit" class="btn btn-primary w-100">Confirmar Ingreso</button>
+                                                </div>
+                                            </form>
+                                            
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- FIN DEL MODAL -->
                             </td>
                         </tr>
                         {% empty %}

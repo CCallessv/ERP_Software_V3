@@ -21,7 +21,7 @@ from core.views import home, exit, clientes_list, crear_cliente, editar_cliente,
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
 from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle,solicitar_acceso
-from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia,  kardex_imprimir_pdf
+from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia,  kardex_imprimir_pdf, reactivar_cliente
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
@@ -33,6 +33,7 @@ urlpatterns = [
     path('clientes/nuevo/', crear_cliente, name='crear_cliente'),
     path('clientes/editar/<int:pk>/', editar_cliente, name='editar_cliente'),
     path('clientes/eliminar/<int:pk>/', eliminar_cliente, name='eliminar_cliente'),
+    path('clientes/reactivar/<int:pk>/', reactivar_cliente, name='reactivar_cliente'),
 
     #aca lilstamos los proudcto de la lista 
     path('inventario/', productos_list, name='productos_list'),
@@ -77,8 +78,10 @@ urlpatterns = [
     # === MODULO DE INVENTARIO / AJUSTES ===
     path('ajustes/', ajuste_list, name='ajuste_list'),
     path('ajustes/nuevo/',  crear_ajuste, name='crear_ajuste'),
-
-    path('cxc/', cuentas_por_cobrar_list, name='cxc_list'),
+    # La pantalla de la lista CUENTAS POR COBRAR
+    path('cuentas-por-cobrar/', cuentas_por_cobrar_list, name='cxc_list'),
+    # La ruta que recibe el POST del modal verde
+    path('cuentas-por-cobrar/<uuid:codigo_generacion>/pago/', registrar_pago_factura, name='registrar_pago_factura'),
     path('cxc/pagar/<uuid:codigo_generacion>/', registrar_pago_factura, name='registrar_pago'),
     # Módulo de Inventario / Kardex
     path('inventario/kardex/', kardex_list, name='kardex_list'),

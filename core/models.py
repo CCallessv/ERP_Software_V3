@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.db.models import Sum
-
+from django.core.validators import MinValueValidator
 
 class Cliente(models.Model):
     # Identificación
@@ -339,7 +339,7 @@ class Venta(models.Model):
     ordering = ['-fecha_hora_emision']
     ESTADOS = (
         ('borrador', 'Borrador'),
-        ('sellada', 'Sellada'), # Corregido: antes decía 'completada', pero en views usamos 'sellada'
+        ('sellada', 'Sellada'), 
         ('anulada', 'Anulada'),
     )
     
@@ -477,7 +477,12 @@ class AjusteInventario(models.Model):
     id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='ajustes')
     tipo = models.CharField(max_length=10, choices=TIPO_AJUSTE)
-    cantidad = models.DecimalField(max_digits=10, decimal_places=2, help_text="Cantidad a ajustar")
+    cantidad = models.DecimalField(
+    max_digits=10, 
+    decimal_places=2, 
+    validators=[MinValueValidator(Decimal('0.01'))], # El blindaje final
+    help_text="Cantidad a ajustar"
+)
     motivo = models.CharField(max_length=255, help_text="Ej: Deterioro del producto")
     
     fecha = models.DateTimeField(default=timezone.now)
@@ -509,3 +514,17 @@ class SolicitudAcceso(models.Model):
     def __str__(self):
         return f"{self.nombres} - {self.correo} ({self.estado})"
 
+class PagoVenta(models.Model):
+    venta = models.ForeignKey(Venta, on_delete=models.PROTECT, related_name='pagos')
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    metodo_pago = models.CharField(max_length=20, choices=Venta.METODO_PAGO)
+    comprobante_pago = models.CharField(max_length=50, blank=True, null=True)
+    
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+    registrado_por = models.ForeignKey(User, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return f"Abono de ${self.monto} a {self.venta.codigo_generacion}"

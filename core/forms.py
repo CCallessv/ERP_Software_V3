@@ -1,7 +1,7 @@
 from django import forms
 import re
 from .models import (
-    Cliente, Producto, Proveedor, Categoria, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,
+    Cliente, Producto, Proveedor, Categoria, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,PagoVenta
 )
 from decimal import Decimal
 from django.core.exceptions import ValidationError
@@ -422,19 +422,33 @@ class AjusteInventarioForm(forms.ModelForm):
             'motivo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Justificación del ajuste'}),
         }
 
-class RegistrarPagoForm(forms.Form):
-    METODO_PAGO_CHOICES = [
-        ('transferencia', 'Transferencia Bancaria'),
-        ('tarjeta', 'Tarjeta de Crédito/Débito'),
-        ('cheque', 'Cheque'),
-        ('efectivo', 'Efectivo (Administrativo)'),
-    ]
-    metodo_pago = forms.ChoiceField(choices=METODO_PAGO_CHOICES, widget=forms.Select(attrs={'class': 'form-select'}))
-    comprobante_pago = forms.CharField(
-        max_length=50, 
-        required=False, 
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Num. Transferencia o Cheque'})
-    )
+class RegistrarPagoForm(forms.ModelForm):
+    class Meta:
+        model = PagoVenta
+        fields = ['monto', 'metodo_pago', 'comprobante_pago']
+        widgets = {
+            'monto': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'metodo_pago': forms.Select(attrs={'class': 'form-select'}),
+            'comprobante_pago': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Num. Transferencia'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        # Recibimos la deuda pendiente desde la vista para poder validarla
+        self.deuda_pendiente = kwargs.pop('deuda_pendiente', 0)
+        super().__init__(*args, **kwargs)
+
+    def clean_monto(self):
+        monto = self.cleaned_data.get('monto')
+        if monto <= 0:
+            raise forms.ValidationError("El pago debe ser mayor a cero.")
+        
+        # Redondeamos a dos decimales para evitar errores de coma flotante
+        monto = round(monto, 2)
+        
+        if monto > self.deuda_pendiente:
+            raise forms.ValidationError(f"Fallo contable: El cliente solo debe ${self.deuda_pendiente}. No puedes cobrarle más de esa cantidad.")
+            
+        return monto
 
 class SolicitudAccesoForm(forms.ModelForm):
     class Meta:
@@ -445,3 +459,21 @@ class SolicitudAccesoForm(forms.ModelForm):
             'correo': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'tucorreo@empresa.com'}),
             'motivo': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Justifica tu solicitud de acceso...'}),
         }    
+
+
+class DetalleVentaForm(forms.Form):
+    # Usamos Form generico porque la vista se encarga de asignar la venta y el producto
+    cantidad = forms.DecimalField(max_digits=10, decimal_places=2)
+    descuento = forms.DecimalField(max_digits=10, decimal_places=2, initial=0)
+
+    def clean_cantidad(self):
+        cantidad = self.cleaned_data.get('cantidad')
+        if cantidad <= 0:
+            raise ValidationError("La cantidad a facturar debe ser estrictamente mayor a cero.")
+        return cantidad
+
+    def clean_descuento(self):
+        descuento = self.cleaned_data.get('descuento')
+        if descuento < 0:
+            raise ValidationError("El descuento no puede ser un número negativo.")
+        return descuento        
