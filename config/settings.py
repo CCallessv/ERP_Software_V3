@@ -9,27 +9,26 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
 from pathlib import Path
+import os
+import dj_database_url
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Cargar variables de entorno desde el archivo .env (solo aplica en tu PC local)
+load_dotenv()
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
+# --- SEGURIDAD Y ENTORNO ---
+# Leemos las variables de forma segura. Si no existe .env, usa los valores por defecto (útil para que no explote de inmediato).
+SECRET_KEY = os.environ.get('SECRET_KEY', 'default-key-para-evitar-errores-tontos')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1#r9o8gi-2c%tthwo2b9)4twn)xqa)573=!99dqwx=41(om8zo'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
+# Permitimos cualquier host temporalmente para evitar el Error 400 Bad Request en Render
+ALLOWED_HOSTS = ['*']
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,6 +41,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # <-- MOTOR DE ESTÁTICOS PARA PRODUCCIÓN
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,20 +70,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
+# --- BASE DE DATOS (Muteable para la nube) ---
+# Si detecta la variable DATABASE_URL en Render, usa PostgreSQL. Si no, usa tu SQLite local.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 # Password validation
-# https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -99,40 +96,32 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
-# https://docs.djangoproject.com/en/5.1/topics/i18n/
-
 LANGUAGE_CODE = 'es-es'
-
 TIME_ZONE = 'America/El_Salvador'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
+# --- ARCHIVOS ESTÁTICOS (CSS, JS, Imágenes) ---
 STATIC_URL = 'static/'
-import os
+
+# Dónde buscará los archivos locales
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
+# Dónde los compilará Django cuando lo subamos a producción
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Compresión y caché agresiva de WhiteNoise para que tu ERP cargue rápido
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- Configuración de Login/Logout ---
-# URL para entrar (por si intentan entrar al dashboard sin permiso)
 LOGIN_URL = 'login'
-
-# Cuando el login es exitoso, ir al Dashboard (home)
-# LOGIN_REDIRECT_URL = 'home' 
-
-# Cuando cierran sesión, mandarlos de vuelta al Login
-LOGOUT_REDIRECT_URL = 'login' 
-
+LOGOUT_REDIRECT_URL = 'login'

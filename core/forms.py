@@ -1,5 +1,6 @@
 from django import forms
 import re
+from datetime import date
 from .models import (
     Cliente, Producto, Proveedor, Categoria, Compra, DetalleCompra, AjusteInventario, SolicitudAcceso,PagoVenta
 )
@@ -328,12 +329,17 @@ class CategoriaForm(forms.ModelForm):
 class CompraForm(forms.ModelForm):
     class Meta:
         model = Compra
-        fields = ['proveedor', 'fecha_compra', 'tipo_comprobante', 'numero_comprobante']
+        fields = [
+            'proveedor', 'fecha_compra', 'tipo_comprobante', 
+            'numero_comprobante', 'condicion_pago', 'dias_credito'
+        ]
         widgets = {
             'fecha_compra': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'proveedor': forms.Select(attrs={'class': 'form-select'}),
             'tipo_comprobante': forms.Select(attrs={'class': 'form-select'}),
             'numero_comprobante': forms.TextInput(attrs={'class': 'form-control'}),
+            'condicion_pago': forms.Select(attrs={'class': 'form-select'}),
+            'dias_credito': forms.NumberInput(attrs={'class': 'form-control', 'min': '0'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -347,15 +353,23 @@ class CompraForm(forms.ModelForm):
             raise ValidationError("Auditoría fallida: No puedes registrar una compra con fecha en el futuro.")
         return fecha
 
-    # 2. Validación cruzada (Proveedor + Factura + Año Fiscal)
+    # 2. Validación cruzada (Proveedor + Factura + Año Fiscal + Condicion de Pago)
     def clean(self):
         cleaned_data = super().clean()
         proveedor = cleaned_data.get('proveedor')
         numero_comprobante = cleaned_data.get('numero_comprobante')
         fecha_compra = cleaned_data.get('fecha_compra')
+        
+        # --- NUEVA VALIDACIÓN FINANCIERA ---
+        condicion = cleaned_data.get('condicion_pago')
+        dias = cleaned_data.get('dias_credito')
+
+        if condicion == 'contado' and dias and dias > 0:
+            self.add_error('dias_credito', "Falla lógica: Una compra al contado no puede tener días de crédito.")
+        # -----------------------------------
 
         if proveedor and numero_comprobante and fecha_compra:
-            # Extraemos el año para aislar la validación por ejercicio fiscal
+            # Extraemos el año para aislar la validacion por ejercicio fiscal
             año_fiscal = fecha_compra.year
             
             compra_duplicada = Compra.objects.filter(
@@ -370,7 +384,7 @@ class CompraForm(forms.ModelForm):
                     f"Alerta de duplicidad: El proveedor {proveedor.nombre} ya tiene la factura {numero_comprobante} registrada en el ejercicio {año_fiscal}."
                 )
 
-        return cleaned_data  
+        return cleaned_data
 
 # === FORMULARIO DE DETALLE DE COMPRA ===
 class DetalleCompraForm(forms.ModelForm):

@@ -56,6 +56,7 @@ from .models import (
     DetalleVenta,
     AjusteInventario,
     MovimientoInventario,
+    PagoCompra,
 )
 
 def es_administrador(user):
@@ -255,7 +256,7 @@ def recepcion_detalle(request, id_publico):
 def exit(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
-
+@login_required
 @user_passes_test(es_administrador)
 def clientes_list(request: HttpRequest) -> HttpResponse:
     search_query = request.GET.get('q', '').strip() # .strip() quita espacios accidentales
@@ -286,6 +287,7 @@ def clientes_list(request: HttpRequest) -> HttpResponse:
     }
     return render(request, 'core/clientes_list.html', context)
 
+@login_required
 @user_passes_test(es_administrador)
 def crear_cliente(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
@@ -300,6 +302,7 @@ def crear_cliente(request: HttpRequest) -> HttpResponse:
     form = ClienteForm()
     return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': None})
 
+@login_required
 @user_passes_test(es_administrador)
 def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
@@ -315,14 +318,18 @@ def editar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     form = ClienteForm(instance=cliente)
     return render(request, 'core/partials/modal_cliente.html', {'form': form, 'cliente': cliente})
 
+@login_required
 @user_passes_test(es_administrador)
 def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
     cliente = get_object_or_404(Cliente, pk=pk)
     
     if request.method == 'POST':
-        # 1. BLOQUEO FINANCIERO: Evitar fuga de deudores
-        # Asumiendo que usas related_name='ventas' o el default 'venta_set'
-        deudas_pendientes = cliente.venta_set.filter(estado_pago='pendiente').exists()
+        # 1. BLOQUEO FINANCIERO: Evitar fuga de deudores (Solo ventas selladas)
+        deudas_pendientes = cliente.venta_set.filter(
+            estado__iexact='sellada', 
+            condicion_pago='credito',
+            estado_pago='pendiente',
+        ).exists()
         
         if deudas_pendientes:
             # Retornamos el modal nuevamente inyectando un mensaje de error rojo
@@ -340,7 +347,7 @@ def eliminar_cliente(request: HttpRequest, pk: int) -> HttpResponse:
         return response
         
     return render(request, 'core/partials/modal_eliminarCliente.html', {'cliente': cliente})
-
+@login_required
 @require_POST
 @user_passes_test(es_administrador)
 def reactivar_cliente(request, pk: int):
@@ -358,7 +365,7 @@ def reactivar_cliente(request, pk: int):
     return response
 
 
-
+@login_required
 def productos_list(request: HttpRequest) -> HttpResponse:
     productos_activos = Producto.objects.filter(activo=True)
     queryset = productos_activos.select_related('categoria').order_by('-id')
@@ -387,7 +394,7 @@ def productos_list(request: HttpRequest) -> HttpResponse:
         return render(request, 'core/partials/producto_table_rows.html', context)
     return render(request, 'core/productos_list.html', context)
 
-
+@login_required
 def crear_producto(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = ProductoForm(request.POST, request.FILES)
@@ -456,7 +463,7 @@ def eliminar_producto(request, pk):
     # Si es GET, solo devolvemos el diseño de la ventanita
     return render(request, 'core/partials/producto_confirm_delete.html', {'producto': producto})
 
-
+@login_required
 def proveedor_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
     
@@ -492,7 +499,7 @@ def proveedor_list(request: HttpRequest) -> HttpResponse:
         
     return render(request, 'core/proveedor_list.html', context)
 
-
+@login_required
 def proveedor_crear(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = ProveedorForm(request.POST)
@@ -509,7 +516,7 @@ def proveedor_crear(request: HttpRequest) -> HttpResponse:
     form = ProveedorForm()
     return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': None})
 
-
+@login_required
 def proveedor_editar(request: HttpRequest, pk: int) -> HttpResponse:
     proveedor = get_object_or_404(Proveedor, pk=pk)
     if request.method == 'POST':
@@ -525,7 +532,7 @@ def proveedor_editar(request: HttpRequest, pk: int) -> HttpResponse:
     form = ProveedorForm(instance=proveedor)
     return render(request, 'core/partials/proveedor_form.html', {'form': form, 'proveedor': proveedor})
 
-
+@login_required
 def eliminar_proveedor(request: HttpRequest, pk: int) -> HttpResponse:
     proveedor = get_object_or_404(Proveedor, pk=pk)
     if request.method == 'POST':
@@ -535,8 +542,9 @@ def eliminar_proveedor(request: HttpRequest, pk: int) -> HttpResponse:
         response['HX-Refresh'] = 'true'
         return response
         
-    return render(request, 'core/partials/Proveedor_confirm_delete.html', {'proveedor': proveedor})
-
+    
+    return render(request, 'core/partials/proveedor_confirm_delete.html', {'proveedor': proveedor})
+@login_required
 def categorias_list(request: HttpRequest) -> HttpResponse:
     busqueda = request.GET.get('q', '')
     categorias = Categoria.objects.filter(estado=True).order_by('nombre')
@@ -558,7 +566,7 @@ def categorias_list(request: HttpRequest) -> HttpResponse:
         return render(request, 'core/partials/categoria_table_rows.html', context)
     return render(request, 'core/categorias_list.html', context)
 
-
+@login_required
 def crear_categoria(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = CategoriaForm(request.POST)
@@ -573,7 +581,7 @@ def crear_categoria(request: HttpRequest) -> HttpResponse:
         form = CategoriaForm()
     return render(request, 'core/partials/categoria_form.html', {'form': form, 'titulo': 'Nueva Categoría'})
 
-
+@login_required
 def editar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
     categoria = get_object_or_404(Categoria, pk=pk)
     if request.method == 'POST':
@@ -591,7 +599,7 @@ def editar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
         'categoria': categoria
     })
 
-
+@login_required
 def eliminar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
     categoria = get_object_or_404(Categoria, pk=pk)
     if request.method == 'POST':
@@ -879,7 +887,6 @@ def compra_resolver_discrepancia(request, id_publico):
 
 
 #MODULO DE VENTAS 
-
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
@@ -937,6 +944,7 @@ def venta_list(request):
     }
     return render(request, 'core/venta_list.html', context)
 
+@login_required
 @require_POST
 @user_passes_test(es_administrador)
 def venta_agregar_producto(request, codigo_generacion):
@@ -997,10 +1005,7 @@ def venta_agregar_producto(request, codigo_generacion):
     venta.refresh_from_db()
     return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
 
-    
-
-
-
+@login_required
 @require_POST
 @user_passes_test(es_administrador)
 def venta_eliminar_producto(request, detalle_id: int):
@@ -1016,6 +1021,7 @@ def venta_eliminar_producto(request, detalle_id: int):
     
     return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
 
+@login_required
 @user_passes_test(es_administrador)
 def venta_detalle(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
@@ -1078,6 +1084,7 @@ def venta_sellar(request, codigo_generacion):
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
+@login_required
 @user_passes_test(es_administrador)
 def generar_pdf_venta(request, codigo_generacion):
     # Traemos la venta y sus detalles
@@ -1157,8 +1164,6 @@ def crear_ajuste(request):
         form = AjusteInventarioForm()
     
     return render(request, 'core/partials/ajuste_form.html', {'form': form})
-
-
 
 @login_required
 @user_passes_test(es_administrador)
@@ -1292,9 +1297,6 @@ def registrar_pago_factura(request, codigo_generacion):
 
     return redirect('cxc_list')
 
-
-
-
 @login_required
 def kardex_detalle(request, producto_id):
     producto = get_object_or_404(Producto, id=producto_id)
@@ -1331,6 +1333,7 @@ def kardex_list(request):
         'valor_total_bodega': valor_total_bodega,
     }
     return render(request, 'core/kardex_list.html', context)    
+
 
 def solicitar_acceso(request):
     if request.method == 'POST':
@@ -1409,3 +1412,65 @@ def kardex_imprimir_pdf(request, producto_id):
         
     return response    
 
+@login_required
+@user_passes_test(es_administrador)
+def cuentas_por_pagar_list(request):
+    # Traemos compras que ya recibimos, que son al credito y que aun debemos
+    pendientes = Compra.objects.filter(
+        estado__in=['recibida', 'parcial', 'ajustada'], 
+        estado_pago='pendiente',
+        condicion_pago='credito'
+    ).annotate(
+        monto_abonado=Coalesce(Sum('pagos__monto'), Value(0), output_field=DecimalField()),
+        saldo_real=F('total') - F('monto_abonado')
+    ).order_by('fecha_compra')
+
+    total_por_pagar = sum(c.saldo_real for c in pendientes)
+    conteo_facturas = pendientes.count()
+
+    context = {
+        'pendientes': pendientes,
+        'total_por_pagar': total_por_pagar,
+        'conteo_facturas': conteo_facturas,
+    }
+    return render(request, 'core/cxp_list.html', context)
+
+@login_required
+@user_passes_test(es_administrador)
+def registrar_pago_compra(request, id_publico):
+    compra = get_object_or_404(Compra, id_publico=id_publico)
+    
+    if request.method == 'POST':
+        try:
+            monto = Decimal(request.POST.get('monto'))
+            metodo_pago = request.POST.get('metodo_pago')
+            comprobante = request.POST.get('comprobante_pago', '')
+            
+            # Recalculamos deuda real
+            abonado = compra.pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+            saldo_real = compra.total - abonado
+            
+            if monto > saldo_real:
+                messages.error(request, f"Fallo contable: Solo debes ${saldo_real}. No puedes registrar un pago mayor.")
+                return redirect('cxp_list')
+                
+            PagoCompra.objects.create(
+                compra=compra,
+                monto=monto,
+                metodo_pago=metodo_pago,
+                comprobante_pago=comprobante,
+                usuario=request.user
+            )
+            
+            # Si el pago liquida la deuda, cerramos la cuenta
+            if monto == saldo_real:
+                compra.estado_pago = 'pagado'
+                compra.save()
+                messages.success(request, f"Pago de ${monto} registrado. Deuda con {compra.proveedor.nombre_comercial} liquidada.")
+            else:
+                messages.success(request, f"Abono de ${monto} registrado exitosamente.")
+                
+        except Exception as e:
+            messages.error(request, f"Error al procesar el pago: {str(e)}")
+            
+    return redirect('cxp_list')

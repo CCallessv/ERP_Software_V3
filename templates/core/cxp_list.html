@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">Cuentas por Pagar</h2>
+                <div class="text-muted mt-1">Gestión de deudas y pagos a proveedores</div>
+            </div>
+            <div class="col-auto ms-auto">
+                <div class="d-flex">
+                    <div class="me-3 text-end">
+                        <div class="text-muted">Total por Pagar</div>
+                        <div class="h2 m-0 text-danger">${{ total_por_pagar|floatformat:2 }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted">Facturas</div>
+                        <div class="h2 m-0">{{ conteo_facturas }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Proveedor / Documento</th>
+                            <th>Condición</th>
+                            <th>Plazo (Días)</th>
+                            <th>Deuda Actual</th>
+                            <th class="w-1"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for compra in pendientes %}
+                        <tr>
+                            <td class="text-muted">{{ compra.fecha_compra|date:"d/m/Y" }}</td>
+                            
+                            <td>
+                                <div class="fw-bold">{{ compra.proveedor.nombre_comercial }}</div>
+                                <div class="text-muted small">{{ compra.get_tipo_comprobante_display }} - {{ compra.numero_comprobante }}</div>
+                            </td>
+                            
+                            <td>
+                                <span class="badge {% if compra.condicion_pago == 'credito' %}bg-orange-lt{% else %}bg-azure-lt{% endif %}">
+                                    {{ compra.get_condicion_pago_display }}
+                                </span>
+                            </td>
+                            
+                            <td>
+                                <span class="text-muted">{{ compra.dias_credito }} días</span>
+                            </td>
+                            
+                            <td class="fw-bold text-danger">${{ compra.saldo_real|floatformat:2 }}</td>
+                            
+                            <td>
+                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modal-pago-{{ compra.id }}">
+                                    Abonar
+                                </button>
+                    
+                                <div class="modal modal-blur fade" id="modal-pago-{{ compra.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            
+                                            <form action="{% url 'registrar_pago_compra' compra.id_publico %}" method="POST">
+                                                {% csrf_token %}
+                                                
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Registrar Egreso</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                
+                                                <div class="modal-body">
+                                                    <div class="alert alert-warning">
+                                                        Deuda actual: <strong>${{ compra.saldo_real|floatformat:2 }}</strong>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold text-danger required">Monto a Pagar ($)</label>
+                                                        <input type="number" step="0.01" min="0.01" max="{{ compra.saldo_real|stringformat:'.2f' }}" name="monto" class="form-control" value="{{ compra.saldo_real|stringformat:'.2f' }}" required>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label required">Método de Pago</label>
+                                                        <select name="metodo_pago" class="form-select" required>
+                                                            <option value="transferencia">Transferencia Bancaria</option>
+                                                            <option value="cheque">Cheque</option>
+                                                            <option value="efectivo">Efectivo (Caja Chica)</option>
+                                                            <option value="tarjeta">Tarjeta Corporativa</option>
+                                                        </select>
+                                                    </div>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Número de Referencia (Opcional)</label>
+                                                        <input type="text" name="comprobante_pago" class="form-control" placeholder="Ej: Cheque #1234">
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                    <button type="submit" class="btn btn-warning w-100">Confirmar Salida de Dinero</button>
+                                                </div>
+                                            </form>
+                                            
+                                        </div>
+                                    </div>
+                                </div>
+                                </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                No le debes nada a ningún proveedor. ¡Cuentas sanas!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

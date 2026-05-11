@@ -1,31 +1,45 @@
-<div class="modal-content">
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-    <div class="modal-status bg-danger"></div>
-    <div class="modal-body text-center py-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.24 3.957l-8.422 14.06a1.989 1.989 0 0 0 1.7 2.983h16.845a1.989 1.989 0 0 0 1.7 -2.983l-8.423 -14.06a1.989 1.989 0 0 0 -3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-        <h3>¿Estás seguro?</h3>
-        <div class="text-secondary">
-            ¿Deseas dar de baja al proveedor <strong>{{ proveedor.nombre_comercial }}</strong>? 
-            Esta acción lo ocultará del directorio activo.
-        </div>
-    </div>
-    <div class="modal-footer">
-        <div class="w-100">
-            <div class="row">
-                <div class="col">
-                    <button type="button" class="btn w-100" data-bs-dismiss="modal">
-                        Cancelar
-                    </button>
-                </div>
-                <div class="col">
-                    <button class="btn btn-danger w-100" 
-                            hx-post="{% url 'eliminar_proveedor' proveedor.pk %}" 
-                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                            hx-target="#dialog">
-                        Sí, dar de baja
-                    </button>
+<div class="modal modal-blur fade" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+        <div class="modal-content">
+            
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="position: absolute; right: 15px; top: 15px;"></button>
+            <div class="modal-status bg-danger"></div>
+            
+            <div class="modal-body text-center py-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M12 9v4" />
+                    <path d="M12 16v.01" />
+                    <path d="M3.16 7.44l8.56 -5.35a1.14 1.14 0 0 1 1.12 0l8.56 5.35a1.14 1.14 0 0 1 .56 .98v8.36a1.14 1.14 0 0 1 -.56 .98l-8.56 5.35a1.14 1.14 0 0 1 -1.12 0l-8.56 -5.35a1.14 1.14 0 0 1 -.56 -.98v-8.36a1.14 1.14 0 0 1 .56 -.98z" />
+                </svg>
+                <h3>¿Eliminar proveedor?</h3>
+                <div class="text-secondary mt-3">
+                    Estás a punto de eliminar a <strong>{{ proveedor.nombre_comercial }}</strong>. 
+                    <br><br>Esta acción quitará al proveedor del directorio.
                 </div>
             </div>
+            
+            <div class="modal-footer">
+                <div class="w-100">
+                    <div class="row">
+                        <div class="col">
+                            <a href="#" class="btn w-100" data-bs-dismiss="modal">
+                                Cancelar
+                            </a>
+                        </div>
+                        <div class="col">
+                            <form hx-post="{% url 'eliminar_proveedor' proveedor.pk %}" 
+                                  hx-target="#modal-container">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger w-100">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>

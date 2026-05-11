@@ -111,31 +111,6 @@ class Producto(models.Model):
         verbose_name_plural = "Inventario"
         ordering = ['nombre']
 #############################################################################3
-
-class DetalleVenta(models.Model):
-    venta = models.ForeignKey('Venta', related_name='detalles', on_delete=models.CASCADE)
-    producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
-    
-    cantidad = models.DecimalField(max_digits=10, decimal_places=2) 
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2) 
-    
-    descuento = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    otros = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    TIPO_AFECTACION = (
-        ('gravada', 'Gravada'),
-        ('exenta', 'Exenta'),
-        ('no_sujeta', 'No Sujeta'),
-    )
-    tipo_afectacion = models.CharField(max_length=15, choices=TIPO_AFECTACION, default='gravada')
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
-
-
-    def save(self, *args, **kwargs):
-        base = (Decimal(str(self.cantidad)) * Decimal(str(self.precio_unitario)))
-        self.subtotal = base - Decimal(str(self.descuento)) + Decimal(str(self.otros))
-        super().save(*args, **kwargs)
-##########################################################
 class Proveedor(models.Model):
     TIPO_PERSONA_CHOICES = [
         ('natural', 'Persona Natural'),
@@ -270,9 +245,9 @@ class Compra(models.Model):
     ESTADO_COMPRA = [
         ('borrador', 'Borrador (Digitando factura)'),
         ('en_transito', 'En Tránsito (Pagada, esperando llegada)'),
-        ('recibida', 'Recibida en Bodega (Stock actualizado)'), #todo cuadro
-        ('parcial', 'Recibida con Diferencias'), # Hay faltantes
-        ('ajustada', 'Cerrada con Nota de Crédito'), # Faltantes resueltos legalmente
+        ('recibida', 'Recibida en Bodega (Stock actualizado)'), 
+        ('parcial', 'Recibida con Diferencias'), 
+        ('ajustada', 'Cerrada con Nota de Crédito'), 
         ('anulada', 'Anulada (Stock revertido)'),
     ]
     
@@ -280,6 +255,19 @@ class Compra(models.Model):
         ('ccf', 'Comprobante de Crédito Fiscal (CCF)'),
         ('factura', 'Factura de Consumidor Final'),
         ('recibo', 'Recibo / Otro'),
+    ]
+
+    
+    CONDICION_PAGO = [
+        ('contado', 'Contado (Pago Inmediato)'),
+        ('credito', 'Crédito (Cuentas por Pagar)'),
+    ]
+
+    ESTADO_PAGO = [
+        ('pendiente', 'Pendiente de Pago'),
+        ('parcial', 'Abono Parcial Registrado'),
+        ('pagado', 'Pagado en su Totalidad'),
+        ('anulado', 'Cobro Anulado'),
     ]
     
     id_publico = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -290,7 +278,11 @@ class Compra(models.Model):
     
     estado = models.CharField(max_length=20, choices=ESTADO_COMPRA, default='borrador')
     
-    # Totales del documento
+    
+    condicion_pago = models.CharField(max_length=10, choices=CONDICION_PAGO, default='contado')
+    estado_pago = models.CharField(max_length=15, choices=ESTADO_PAGO, default='pendiente')
+    dias_credito = models.PositiveIntegerField(default=0, help_text="Días de plazo si es de crédito")
+    
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     impuestos = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -299,9 +291,9 @@ class Compra(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
 
     observaciones = models.TextField(blank=True, null=True, verbose_name="Notas de Resolución (Diferencias)")
+    
     class Meta:
         ordering = ['-fecha_compra', '-id']
-        # Evita ingresar la misma factura del mismo proveedor 2 veces
         unique_together = ['proveedor', 'numero_comprobante']
 
     def __str__(self):
@@ -309,14 +301,37 @@ class Compra(models.Model):
 
     @property
     def tiene_discrepancias(self):
-        """Retorna True si alguna cantidad recibida es distinta a la facturada."""
         if self.estado != 'recibida':
             return False
         for detalle in self.detalles.all():
             if detalle.cantidad_recibida is not None and detalle.cantidad != detalle.cantidad_recibida:
                 return True
         return False
-##############################################################################
+
+# Historial de egresos (Cheques/Transferencias emitidas a proveedores)
+class PagoCompra(models.Model):
+    METODO_PAGO = [
+        ('efectivo', 'Efectivo (Caja Chica)'),
+        ('transferencia', 'Transferencia Bancaria'),
+        ('cheque', 'Cheque'),
+        ('tarjeta', 'Tarjeta Corporativa'),
+    ]
+
+    compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='pagos')
+    monto = models.DecimalField(max_digits=10, decimal_places=2)
+    fecha_pago = models.DateTimeField(default=timezone.now)
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO)
+    comprobante_pago = models.CharField(max_length=100, blank=True, null=True, help_text="Número de cheque o referencia de transferencia")
+    
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT, help_text="Usuario que registró la salida de dinero")
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_pago']
+
+    def __str__(self):
+        return f"Pago de ${self.monto} a {self.compra.proveedor.nombre_comercial} ({self.fecha_pago.strftime('%Y-%m-%d')})"
+##########################################################################
 class DetalleCompra(models.Model):
     compra = models.ForeignKey(Compra, on_delete=models.CASCADE, related_name='detalles')
     producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
@@ -407,8 +422,9 @@ class Venta(models.Model):
 
 
 class DetalleVenta(models.Model):
-    venta = models.ForeignKey(Venta, related_name='detalles', on_delete=models.CASCADE)
-    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    # Usamos comillas por si los modelos Venta o Producto están más abajo en el archivo
+    venta = models.ForeignKey('Venta', related_name='detalles', on_delete=models.CASCADE)
+    producto = models.ForeignKey('Producto', on_delete=models.PROTECT)
     
     # CANTIDADES BASE
     # Nota: Uso DecimalField en cantidad porque en alimentos a veces vendes "1.5 libras"
@@ -434,7 +450,7 @@ class DetalleVenta(models.Model):
         # La fórmula estricta según Hacienda: (Cantidad * Precio Unitario) - Descuento + Otros
         base = (Decimal(str(self.cantidad)) * Decimal(str(self.precio_unitario)))
         self.subtotal = base - Decimal(str(self.descuento)) + Decimal(str(self.otros))
-        super().save(*args, **kwargs)       
+        super().save(*args, **kwargs)  
 
 # INTERCEPTOR TRIBUTARIO PARA EL SALVADOR
 @receiver(post_save, sender=DetalleVenta)

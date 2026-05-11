@@ -40,6 +40,23 @@
                                     <label class="form-label required">Número de Comprobante</label>
                                     {{ form.numero_comprobante }}
                                 </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label required">Condición de Pago</label>
+                                        {{ form.condicion_pago }}
+                                        {% if form.condicion_pago.errors %}
+                                            <div class="text-danger small mt-1">{{ form.condicion_pago.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Plazo de Crédito (Días)</label>
+                                        {{ form.dias_credito }}
+                                        {% if form.dias_credito.errors %}
+                                            <div class="text-danger small mt-1">{{ form.dias_credito.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-footer text-end mt-4">
                                 <a href="{% url 'compra_list' %}" class="btn btn-link">Cancelar</a>
