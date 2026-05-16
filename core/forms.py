@@ -103,7 +103,7 @@ class ProductoForm(forms.ModelForm):
         model = Producto
         fields = [
             'nombre', 'categoria', 'unidad_medida_base', 
-            'ubicacion', 'stock', 'stock_minimo', 'stock_maximo',
+            'ubicacion', 'stock_minimo', 'stock_maximo',
             'precio_costo', 'precio_venta', 'es_vendible', 
             'es_comprable', 'imagen', 'activo'
         ]
@@ -115,11 +115,6 @@ class ProductoForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-check-input'
             else:
                 field.widget.attrs['class'] = 'form-control'
-                
-        # BLOQUEO VISUAL: El stock inicial no se manipula aquí
-        self.fields['stock'].widget.attrs['readonly'] = True
-        self.fields['stock'].initial = 0.00
-        self.fields['stock'].help_text = "El stock se gestiona vía compras o ajustes."
         
         self.fields['precio_costo'].widget.attrs['min'] = 0
         self.fields['precio_venta'].widget.attrs['min'] = 0
