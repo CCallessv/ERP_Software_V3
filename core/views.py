@@ -68,13 +68,17 @@ class CustomLoginView(LoginView):
     template_name = 'core/login.html' 
 
     def get_success_url(self):
-        # Aqui interceptamos a donde va el usuario DESPUES de poner bien su clave
-        if self.request.user.is_staff:
-            return reverse_lazy('home') # El administrador/gerente va al Dashboard
+        # 1. Respetar si el usuario intentaba acceder a una URL protegida específica (?next=...)
+        url_destino = self.get_redirect_url()
+        if url_destino:
+            return url_destino
         
-        # Si no es staff (es bodeguero u operativo), va directo a productos
+        # 2. Si entró por la puerta principal, aplicar el enrutamiento por roles
+        if self.request.user.is_staff:
+            return reverse_lazy('home')
+        
         return reverse_lazy('productos_list')
-
+        
 @login_required
 @user_passes_test(es_administrador)
 def home(request):

@@ -22,12 +22,14 @@ from core.views import proveedor_list, proveedor_crear, proveedor_editar, elimin
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
 from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle,solicitar_acceso
 from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia,  kardex_imprimir_pdf, reactivar_cliente,cuentas_por_pagar_list,registrar_pago_compra
+from django.contrib.auth.views import LogoutView
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
-    # Ruta de Login (Usando la plantilla personalizada)
     path('login/', CustomLoginView.as_view(), name='login'),
-    path('logout/', exit, name='logout'),
+    path('logout/', LogoutView.as_view(next_page='login'), name='logout'),
     #ruta clientes
     path('clientes/', clientes_list, name='clientes_list'),
     path('clientes/nuevo/', crear_cliente, name='crear_cliente'),
