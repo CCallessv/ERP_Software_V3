@@ -16,22 +16,21 @@
 
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <style>
-        /* 1. ESTILOS GLOBALES*/
-        
-        
+        /* 1. ESTILOS GLOBALES: Se ven igual en PC y Celular */
+        /* Eliminar raya azul nativa de Tabler */
         .navbar-vertical .nav-item.active .nav-link::after,
         .navbar-vertical .nav-link.active::after {
             display: none !important;
         }
     
-        /* Reemplazarlo con el estandar visual de dashboards (borde izquierdo) */
+        /* Borde izquierdo azul (el nuevo estilo) */
         .navbar-vertical .nav-item.active .nav-link {
-            background-color: rgba(32, 107, 196, 0.08); 
-            border-left: 3px solid #206bc4 !important; 
-            border-radius: 0 4px 4px 0; 
+            background-color: rgba(32, 107, 196, 0.08);
+            border-left: 3px solid #206bc4 !important;
+            border-radius: 0 4px 4px 0;
         }
     
-        /* 2. RESTRICCIONES SOLO PARA MOVILES (Menos de 992px) */
+        /* 2. RESTRICCIÓN MÓVIL: Solo se achica cuando la pantalla es pequeña */
         @media (max-width: 991.98px) {
             #sidebar-menu {
                 max-width: 250px !important; 
