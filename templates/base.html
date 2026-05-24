@@ -53,9 +53,7 @@
         
                 <div class="offcanvas-lg offcanvas-start bg-dark" tabindex="-1" id="sidebar-menu">
                     <ul class="navbar-nav pt-lg-3">
-                        <li class="nav-item d-lg-none w-100 text-end pe-3 pt-3 pb-2 border-bottom mb-2">
-                            <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" aria-label="Cerrar menú"></button>
-                        </li>
+                        
     
                         {% if request.user.is_staff %}
                         <li class="nav-item {% if request.path == '/' %}active{% endif %}">
