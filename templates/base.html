@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es" data-bs-theme="dark">
+    
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,6 +15,14 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/demo.min.css">
 
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <style>
+        /* Forzar la reducción del menú solo en dispositivos móviles (menos de 992px) */
+        @media (max-width: 991.98px) {
+            .navbar-vertical.navbar-expand-lg {
+                max-width: 220px !important; /* Reduce este número si lo quieres aún más delgado */
+            }
+        }
+    </style>
 </head>
 <body>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/js/demo-theme.min.js"></script>
@@ -21,7 +30,7 @@
 
         <aside class="navbar navbar-vertical navbar-expand-lg navbar-dark">
             <div class="container-fluid d-flex flex-column justify-content-start">
-                <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar-menu" aria-controls="sidebar-menu" aria-label="Toggle navigation">    <span class="navbar-toggler-icon"></span>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu" ...>
                 </button>
         
                 <h1 class="navbar-brand navbar-brand-autodark mb-3">
