@@ -16,25 +16,27 @@
 
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <style>
-        /* Forzar la reducción solo del menú desplegable, respetando la barra superior */
+        /* 1. ESTILOS GLOBALES*/
+        
+        
+        .navbar-vertical .nav-item.active .nav-link::after,
+        .navbar-vertical .nav-link.active::after {
+            display: none !important;
+        }
+    
+        /* Reemplazarlo con el estandar visual de dashboards (borde izquierdo) */
+        .navbar-vertical .nav-item.active .nav-link {
+            background-color: rgba(32, 107, 196, 0.08); 
+            border-left: 3px solid #206bc4 !important; 
+            border-radius: 0 4px 4px 0; 
+        }
+    
+        /* 2. RESTRICCIONES SOLO PARA MOVILES (Menos de 992px) */
         @media (max-width: 991.98px) {
             #sidebar-menu {
                 max-width: 250px !important; 
-                border-bottom-right-radius: 8px; /* Un toque de diseño para que no se vea cortado */
+                border-bottom-right-radius: 8px;
             }
-
-                            /* 1. Asesinar la raya horizontal de Tabler en el menú vertical */
-                .navbar-vertical .nav-item.active .nav-link::after,
-                .navbar-vertical .nav-link.active::after {
-                    display: none !important;
-                }
-
-                /* 2. Reemplazarlo con el estándar visual de dashboards (borde izquierdo) */
-                .navbar-vertical .nav-item.active .nav-link {
-                    background-color: rgba(32, 107, 196, 0.08); /* Fondo azul muy tenue */
-                    border-left: 3px solid #206bc4 !important; /* Línea vertical izquierda */
-                    border-radius: 0 4px 4px 0; /* Suavizar los bordes derechos */
-                }
         }
     </style>
 </head>
