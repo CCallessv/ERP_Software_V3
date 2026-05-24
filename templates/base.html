@@ -16,10 +16,11 @@
 
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <style>
-        /* Forzar la reducción del menú solo en dispositivos móviles (menos de 992px) */
+        /* Forzar la reducción solo del menú desplegable, respetando la barra superior */
         @media (max-width: 991.98px) {
-            .navbar-vertical.navbar-expand-lg {
-                max-width: 220px !important; /* Reduce este número si lo quieres aún más delgado */
+            #sidebar-menu {
+                max-width: 250px !important; 
+                border-bottom-right-radius: 8px; /* Un toque de diseño para que no se vea cortado */
             }
         }
     </style>
