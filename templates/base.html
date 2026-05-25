@@ -397,6 +397,21 @@
             }
             aniquilarFondoNegro(); // Ejecutamos la limpieza final por si acaso
         });
+
+        // --- CERRAR MENÚ MÓVIL AL TOCAR AFUERA (LÓGICA PURA) ---
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('sidebar-menu');
+        const toggler = document.querySelector('.navbar-toggler');
+        
+        // Verificamos que el menú exista, esté abierto (clase 'show') y que el clic NO haya sido dentro del menú ni en el botón hamburguesa
+        if (sidebar && sidebar.classList.contains('show') && !sidebar.contains(event.target) && !toggler.contains(event.target)) {
+            // Cerramos el menú usando la API nativa de Bootstrap
+            const bsCollapse = bootstrap.Collapse.getInstance(sidebar);
+            if (bsCollapse) {
+                bsCollapse.hide();
+            }
+        }
+    });
     </script>
 
     {% block scripts %}
