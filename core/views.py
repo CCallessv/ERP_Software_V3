@@ -78,7 +78,7 @@ class CustomLoginView(LoginView):
             return reverse_lazy('home')
         
         return reverse_lazy('productos_list')
-        
+
 @login_required
 @user_passes_test(es_administrador)
 def home(request):
@@ -615,102 +615,6 @@ def eliminar_categoria(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, 'core/partials/categoria_confirm_delete.html', {'categoria': categoria})
 
 
-@require_POST
-@login_required
-@user_passes_test(es_administrador)
-def venta_sellar(request, codigo_generacion):
-    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
-    
-    if venta.estado != 'borrador':
-        messages.error(request, 'Esta factura ya fue sellada o anulada.')
-        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-        
-    detalles = venta.detalles.all()
-    if not detalles.exists():
-        messages.warning(request, 'No puedes sellar una factura vacía. Agrega productos.')
-        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-
-    # 1. BLOQUEO FISCAL (No lo borres)
-    if venta.tipo_documento == 'CCF':
-        if not venta.cliente.nrc or not venta.cliente.giro:
-            messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC o Giro.")
-            return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-
-    try:
-        with transaction.atomic():
-            suma_gravadas = Decimal('0.00')
-
-            # 2. RECALCULAR PRECIOS Y DESCONTAR KÁRDEX
-            for detalle in detalles:
-                producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
-                
-                precio_actual = producto.precio_venta
-                if venta.tipo_documento == 'CCF':
-                    precio_actual = (precio_actual / Decimal('1.13')).quantize(Decimal('0.01'))
-                
-                detalle.precio_unitario = precio_actual
-                
-                subtotal_sin_descuento = detalle.cantidad * precio_actual
-                if detalle.descuento > subtotal_sin_descuento:
-                    raise ValueError(f"Fallo contable: El precio de {producto.nombre} bajó y el descuento ahora es mayor al total.")
-                
-                detalle.save()
-                
-                subtotal_linea = subtotal_sin_descuento - detalle.descuento
-                suma_gravadas += subtotal_linea
-
-                MovimientoInventario.objects.create(
-                    producto=producto,
-                    tipo='salida_venta',
-                    cantidad=detalle.cantidad, 
-                    costo_unitario=producto.precio_costo,
-                    referencia=f"{venta.tipo_documento} - {str(venta.codigo_generacion)[:8]}",
-                    usuario=request.user,
-                    notas="Venta registrada automáticamente."
-                )
-
-            # 3. DETERMINAR EL TOTAL REAL (Con los precios actualizados)
-            if venta.tipo_documento == 'CCF':
-                iva_real = (suma_gravadas * Decimal('0.13')).quantize(Decimal('0.01'))
-                total_real = suma_gravadas + iva_real
-            else:
-                iva_real = Decimal('0.00')
-                total_real = suma_gravadas
-
-            # 4. BLOQUEO DE CRÉDITO ESTRICTO
-            if venta.condicion_pago == 'credito':
-                if venta.cliente.limite_credito <= 0:
-                    raise ValueError("Este cliente no tiene crédito autorizado (Límite $0.00).")
-
-                deuda_historica = Venta.objects.filter(
-                    cliente=venta.cliente, 
-                    condicion_pago='credito', 
-                    estado='sellada', 
-                    estado_pago='pendiente'
-                ).aggregate(total_deuda=Sum('total_pagar'))['total_deuda'] or Decimal('0.00')
-
-                deuda_proyectada = deuda_historica + total_real
-
-                if deuda_proyectada > venta.cliente.limite_credito:
-                    # Al hacer raise, el Kárdex y los precios retroceden automáticamente
-                    raise ValueError(f"Riesgo Financiero: Límite ${venta.cliente.limite_credito}. Deuda pendiente ${deuda_historica}. Factura actual ${total_real.quantize(Decimal('0.01'))}. Supera el límite.")
-
-            # 5. CONSOLIDAR EL DOCUMENTO FISCAL
-            venta.sumatoria_gravadas = suma_gravadas
-            venta.iva = iva_real
-            venta.total_pagar = total_real
-            venta.estado = 'sellada'
-            venta.save()
-            
-            messages.success(request, 'Documento sellado con precios vigentes. Riesgo financiero evaluado y Kárdex descontado.')
-            
-    except ValueError as e:
-        messages.error(request, str(e))
-    except Exception as e:
-        messages.error(request, f"Error crítico en el sellado: {str(e)}")
-        
-    return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-
 #Modulo de COMPRAS
 @login_required
 @user_passes_test(es_administrador)
@@ -891,21 +795,135 @@ def compra_resolver_discrepancia(request, id_publico):
 
 
 #MODULO DE VENTAS 
+@require_POST
+@login_required
+@user_passes_test(es_administrador)
+def venta_sellar(request, codigo_generacion):
+    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
+    
+    # 1. VALIDA EL ESTADO INICIAL
+    if venta.estado != 'borrador':
+        messages.error(request, 'Esta cotización/factura ya fue procesada o anulada.')
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+        
+    detalles = venta.detalles.all()
+    if not detalles.exists():
+        messages.warning(request, 'No puedes aprobar una cotización vacía. Agrega productos.')
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+    # 2. BLOQUEO FISCAL B2B
+    if venta.tipo_documento == 'CCF':
+        if not venta.cliente.nrc or not venta.cliente.giro:
+            messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC o Giro.")
+            return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+    try:
+        with transaction.atomic():
+            suma_gravadas = Decimal('0.00')
+
+            # 3. RECALCULAR PRECIOS
+            for detalle in detalles:
+                producto = Producto.objects.select_for_update().get(id=detalle.producto.id)
+                
+                precio_actual = producto.precio_venta
+                if venta.tipo_documento == 'CCF':
+                    precio_actual = (precio_actual / Decimal('1.13')).quantize(Decimal('0.01'))
+                
+                detalle.precio_unitario = precio_actual
+                
+                subtotal_sin_descuento = detalle.cantidad * precio_actual
+                if detalle.descuento > subtotal_sin_descuento:
+                    raise ValueError(f"Fallo contable: El precio de {producto.nombre} bajó y el descuento ahora es mayor al total.")
+                
+                detalle.save()
+                
+                subtotal_linea = subtotal_sin_descuento - detalle.descuento
+                suma_gravadas += subtotal_linea
+
+            # 4. DETERMINAR EL TOTAL REAL
+            if venta.tipo_documento == 'CCF':
+                iva_real = (suma_gravadas * Decimal('0.13')).quantize(Decimal('0.01'))
+                total_real = suma_gravadas + iva_real
+            else:
+                iva_real = Decimal('0.00')
+                total_real = suma_gravadas
+
+            # 4.5 BLOQUEO HÍBRIDO: Prohibido dar crédito en FCF
+            if venta.tipo_documento == 'FCF' and venta.condicion_pago == 'credito':
+                raise ValueError("Falla de lógica de negocio: Las Facturas de Consumidor Final (FCF) no pueden emitirse al crédito. Deben ser pagadas al contado.")
+
+            # 5. BLOQUEO DE CRÉDITO ESTRICTO
+            if venta.condicion_pago == 'credito':
+                if venta.cliente.limite_credito <= 0:
+                    raise ValueError(f"Venta Denegada: El cliente {venta.cliente.nombres} no tiene crédito autorizado (Límite $0.00).")
+
+                # Sumar toda la deuda existente que está en estado pendiente
+                deuda_historica = Venta.objects.filter(
+                    cliente=venta.cliente, 
+                    condicion_pago='credito', 
+                    estado='sellada', 
+                    estado_pago='pendiente'
+                ).aggregate(total_deuda=Sum('total_pagar'))['total_deuda'] or Decimal('0.00')
+
+                deuda_proyectada = deuda_historica + total_real
+
+                if deuda_proyectada > venta.cliente.limite_credito:
+                    # El rollback de transaction.atomic revertirá cualquier cambio hecho arriba
+                    raise ValueError(
+                        f"Venta Denegada por Riesgo Financiero. "
+                        f"Límite del cliente: ${venta.cliente.limite_credito}. "
+                        f"Deuda actual pendiente: ${deuda_historica}. "
+                        f"Cotización actual: ${total_real.quantize(Decimal('0.01'))}. "
+                        f"Proyectado: ${deuda_proyectada.quantize(Decimal('0.01'))} (Supera el límite)."
+                    )
+
+            # 6. ACTUALIZAR KÁRDEX
+            for detalle in detalles:
+                MovimientoInventario.objects.create(
+                    producto=detalle.producto,
+                    tipo='salida_venta',
+                    cantidad=detalle.cantidad, 
+                    costo_unitario=detalle.producto.precio_costo,
+                    referencia=f"{venta.tipo_documento} - {str(venta.codigo_generacion)[:8]}",
+                    usuario=request.user,
+                    notas="Venta registrada y descontada automáticamente."
+                )
+
+            # 7. CONSOLIDAR EL DOCUMENTO FINAL
+            venta.sumatoria_gravadas = suma_gravadas
+            venta.iva = iva_real
+            venta.total_pagar = total_real
+            venta.estado = 'sellada'
+            
+            # Solo si es al contado marcamos la venta como pagada inmediatamente
+            if venta.condicion_pago == 'contado':
+                venta.estado_pago = 'pagado'
+                
+            venta.save()
+            
+            messages.success(request, 'Cotización aprobada. Venta sellada, crédito evaluado y Kárdex descontado.')
+            
+    except ValueError as e:
+        messages.error(request, str(e))
+    except Exception as e:
+        messages.error(request, f"Error crítico en el sellado: {str(e)}")
+        
+    return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+    
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
-    # 1. Si HTMX pide el formulario (GET) para abrir el modal
     if request.method == 'GET':
         clientes = Cliente.objects.filter(estado=True).order_by('nombres')
         return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
 
-    # 2. Si HTMX envía los datos para guardar (POST)
     if request.method == 'POST':
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
         condicion_pago = request.POST.get('condicion_pago') 
 
-        # Validación estricta actualizada
+        # 1. Validación de campos vacíos
         if not cliente_id or not tipo_documento or not condicion_pago:
             clientes = Cliente.objects.filter(estado=True).order_by('nombres')
             return render(request, 'core/partials/venta_borrador_form.html', {
@@ -913,9 +931,17 @@ def crear_venta_borrador(request):
                 'error': "Faltan datos. Debes seleccionar cliente, documento y condición de pago."
             })
 
+        # 2. BLOQUEO HÍBRIDO FRONTEND: No dejar que nazca un error
+        if tipo_documento == 'FCF' and condicion_pago == 'credito':
+            clientes = Cliente.objects.filter(estado=True).order_by('nombres')
+            return render(request, 'core/partials/venta_borrador_form.html', {
+                'clientes': clientes,
+                'error': "Lógica inválida: Las facturas FCF no pueden ser emitidas al crédito. Cambia a CCF o pago al Contado."
+            })
+
         cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # Crear la venta con todos sus datos
+        # 3. Crear la venta con todos sus datos
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
@@ -923,7 +949,6 @@ def crear_venta_borrador(request):
             condicion_pago=condicion_pago 
         )
         
-        # Le ordenamos a HTMX que cambie la URL del navegador al detalle de la venta.
         response = HttpResponse(status=204)
         response['HX-Redirect'] = reverse('venta_detalle', kwargs={'codigo_generacion': nueva_venta.codigo_generacion})
         return response
@@ -1040,53 +1065,6 @@ def venta_detalle(request, codigo_generacion):
         'productos': productos_disponibles,
     }
     return render(request, 'core/venta_detalle.html', context)
-
-
-@require_POST
-@login_required
-@user_passes_test(es_administrador)
-def venta_sellar(request, codigo_generacion):
-    venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
-    
-    if venta.estado != 'borrador':
-        messages.error(request, 'Esta factura ya fue sellada o anulada.')
-        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-        
-    detalles = venta.detalles.all()
-    if not detalles.exists():
-        messages.warning(request, 'No puedes sellar una factura vacía.')
-        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
-
-    try:
-        with transaction.atomic():
-            for detalle in detalles:
-                # 1. Ya no hay presentaciones, la cantidad ingresada es exactamente la cantidad a descontar
-                descuento_real_inventario = detalle.cantidad
-                
-                # 2. CREAMOS EL MOVIMIENTO. El modelo Kárdex validará negativos y restará el stock.
-                MovimientoInventario.objects.create(
-                    producto=detalle.producto,
-                    tipo='salida_venta',
-                    cantidad=descuento_real_inventario, 
-                    costo_unitario=detalle.producto.precio_costo,
-                    referencia=f"{venta.tipo_documento} - {str(venta.codigo_generacion)[:8]}",
-                    usuario=request.user,
-                    notas="Venta registrada y descontada automáticamente."
-                )
-            
-            # 3. Marcamos la venta como finalizada
-            venta.estado = 'sellada' 
-            venta.save()
-            
-            messages.success(request, 'Factura sellada. Kárdex actualizado con rastro de auditoría exacto.')
-            
-    except ValueError as e:
-        # Atrapa el error de "Stock en negativo" si se intenta vender más de lo que hay
-        messages.error(request, str(e))
-    except Exception as e:
-        messages.error(request, f"Error crítico en el sellado: {str(e)}")
-        
-    return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
 @login_required
 @user_passes_test(es_administrador)
