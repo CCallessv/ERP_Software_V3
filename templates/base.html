@@ -288,15 +288,66 @@
                     </div>
                 </div>
             </footer>
-            </div>
+        </div>
         </div><div id="modal-container"></div>
     <div class="modal modal-blur fade" id="modal-generic" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered" role="document" id="dialog"></div>
     </div>
 
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1055;">
+        <div id="htmxErrorToast" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="htmxErrorMessage">
+                    </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+            </div>
+        </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/js/tabler.min.js"></script>
     <script src="https://unpkg.com/imask"></script>
+
+    <script>
+        // Función para invocar el Toast de Bootstrap
+        function mostrarErrorHTMX(mensaje) {
+            const toastElement = document.getElementById('htmxErrorToast');
+            const toastBody = document.getElementById('htmxErrorMessage');
+            
+            // Inyectamos el mensaje
+            toastBody.textContent = mensaje;
+            
+            // Inicializamos y mostramos el Toast
+            const toast = new bootstrap.Toast(toastElement, { delay: 5000 }); // Se oculta solo a los 5 segundos
+            toast.show();
+        }
+    
+        // 1. Capturar errores de servidor (4xx y 5xx)
+        document.body.addEventListener('htmx:responseError', function(evt) {
+            const statusCode = evt.detail.xhr.status;
+            let errorMessage = "Ocurrió un error inesperado al procesar la solicitud.";
+    
+            if (statusCode === 400) {
+                errorMessage = "Solicitud incorrecta. Revisa los datos enviados (Error 400).";
+            } else if (statusCode === 403) {
+                errorMessage = "No tienes permisos para realizar esta acción (Error 403).";
+            } else if (statusCode === 404) {
+                errorMessage = "El recurso o documento no fue encontrado (Error 404).";
+            } else if (statusCode === 405) {
+                errorMessage = "Acción bloqueada. Método no permitido (Error 405).";
+            } else if (statusCode >= 500) {
+                errorMessage = "Fallo interno del servidor (Error 500). La transacción fue abortada por seguridad.";
+            }
+    
+            mostrarErrorHTMX(errorMessage);
+            console.error(`[HTMX Error ${statusCode}]`, evt.detail.xhr.responseText);
+        });
+    
+        // 2. Capturar errores de Red (Falta de internet o timeout)
+        document.body.addEventListener('htmx:sendError', function(evt) {
+            mostrarErrorHTMX("Error de conexión: No se pudo contactar al servidor. Revisa tu internet.");
+            console.error("[HTMX Network Error] El servidor no responde.");
+        });
+    </script>
 
     <script>
         // 1. TU FUNCIÓN DE MÁSCARAS INTACTA
