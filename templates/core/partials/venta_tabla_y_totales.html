@@ -69,22 +69,23 @@
             </div>
 
             <div class="col-6 text-end">
-                <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${{ venta.sumatoria_gravadas }}</span></div>
-                <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas }}</span></div>
+                {% if venta.tipo_documento == 'CCF' %}
+                    <div class="text-muted mb-1">Subtotal (Sin IVA): <span class="text-body fw-bold">${{ subtotal_neto|floatformat:2 }}</span></div>
+                    <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas|floatformat:2 }}</span></div>
+                    
+                    <div class="text-muted mb-2 border-bottom pb-2">
+                        IVA (13%): <span class="text-body fw-bold">${{ iva_calculado|floatformat:2 }}</span>
+                    </div>
+                {% else %}
+                    <div class="text-muted mb-1">Sumatoria Gravadas: <span class="text-body fw-bold">${{ venta.total_pagar|floatformat:2 }}</span></div>
+                    <div class="text-muted mb-1">Sumatoria Exentas: <span class="text-body fw-bold">${{ venta.sumatoria_exentas|floatformat:2 }}</span></div>
+                    
+                    <div class="text-muted mb-2 border-bottom pb-2">
+                        IVA (13%): <span class="badge bg-secondary text-secondary-fg ms-1">INCLUIDO</span>
+                    </div>
+                {% endif %}
                 
-                <!-- CORRECCIÓN 2: Lógica visual para CCF vs Factura -->
-                <div class="text-muted mb-2 border-bottom pb-2">
-                    IVA (13%): 
-                    <span class="text-body fw-bold">
-                        {% if venta.tipo_documento == 'ccf' %}
-                            ${{ venta.iva }}
-                        {% else %}
-                            <span class="badge bg-secondary text-secondary-fg ms-1">INCLUIDO</span>
-                        {% endif %}
-                    </span>
-                </div>
-                
-                <h2 class="mb-0 text-success">Total: ${{ venta.total_pagar }}</h2>
+                <h2 class="mb-0 text-success">Total: ${{ venta.total_pagar|floatformat:2 }}</h2>
             </div>
         </div>
     </div>

@@ -1073,9 +1073,22 @@ def venta_detalle(request, codigo_generacion):
         stock__gt=0
     ).order_by('nombre')
     
+    # CALCULOS DINÁMICOS PARA EL COMPROBANTE
+    if venta.estado == 'borrador':
+        # Si es borrador, calculamos el IVA en tiempo real basado en el total acumulado
+        total = venta.total_pagar or Decimal('0.00')
+        subtotal_neto = (total / Decimal('1.13')).quantize(Decimal('0.01'))
+        iva_calculado = (total - subtotal_neto).quantize(Decimal('0.01'))
+    else:
+        # Si ya está sellada, consumimos los datos fijos de la base de datos
+        subtotal_neto = venta.sumatoria_gravadas
+        iva_calculado = venta.iva
+    
     context = {
         'venta': venta,
         'productos': productos_disponibles,
+        'subtotal_neto': subtotal_neto,
+        'iva_calculado': iva_calculado,
     }
     return render(request, 'core/venta_detalle.html', context)
 
