@@ -16,13 +16,11 @@
                             </div>
                         {% endif %}
                         <div class="mb-3">
-                            <label class="form-label">Selecciona el Cliente</label>
-                            <select name="cliente" class="form-select">
-                                <option value="">-- Cliente Mostrador (Automático) --</option>
+                            <label class="form-label">Selecciona el Cliente *</label>
+                            <select name="cliente" class="form-select" required>
+                                <option value="">-- Selecciona un cliente --</option>
                                 {% for cliente in clientes %}
                                     <option value="{{ cliente.id }}">{{ cliente.nombres }} {{ cliente.apellidos }}</option>
-                                {% empty %}
-                                    <option value="" disabled>No hay clientes registrados.</option>
                                 {% endfor %}
                             </select>
                         </div>
