@@ -539,3 +539,5 @@ class PagoVenta(models.Model):
 
     def __str__(self):
         return f"Abono de ${self.monto} a {self.venta.codigo_generacion}"
+
+        

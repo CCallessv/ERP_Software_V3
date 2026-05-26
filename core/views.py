@@ -57,6 +57,7 @@ from .models import (
     AjusteInventario,
     MovimientoInventario,
     PagoCompra,
+    PagoVenta,
 )
 
 def es_administrador(user):
@@ -1532,3 +1533,39 @@ def registrar_pago_compra(request, id_publico):
             messages.error(request, f"Error al procesar el pago: {str(e)}")
             
     return redirect('cxp_list')
+
+
+@login_required
+@user_passes_test(es_administrador) # Ojo: Solo administradores deberían ver esto
+def reporte_ingresos(request):
+    # 1. Capturar fechas del formulario GET (si existen)
+    fecha_inicio = request.GET.get('fecha_inicio')
+    fecha_fin = request.GET.get('fecha_fin')
+
+    pagos = PagoVenta.objects.all().select_related('venta', 'registrado_por')
+
+    # 2. Lógica de filtrado por fechas
+    if fecha_inicio and fecha_fin:
+        pagos = pagos.filter(fecha_registro__date__range=[fecha_inicio, fecha_fin])
+    else:
+        # Por defecto, mostramos los ingresos del día de hoy
+        hoy = timezone.now().date()
+        pagos = pagos.filter(fecha_registro__date=hoy)
+        fecha_inicio = hoy.strftime('%Y-%m-%d')
+        fecha_fin = hoy.strftime('%Y-%m-%d')
+
+    # 3. Agrupación matemática (Sumatoria por método de pago)
+    totales_por_metodo = pagos.values('metodo_pago').annotate(total=Sum('monto')).order_by('-total')
+    
+    # 4. Cálculo del Gran Total
+    gran_total = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+
+    context = {
+        'pagos': pagos,
+        'totales_por_metodo': totales_por_metodo,
+        'gran_total': gran_total,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+    }
+    
+    return render(request, 'core/reporte_ingresos.html', context)
