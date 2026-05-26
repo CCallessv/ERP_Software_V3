@@ -30,6 +30,7 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
 from django.db.models import Sum, F, Value, DecimalField
 from django.db.models.functions import Coalesce
+from django.db.models import Value
 
 from .forms import (
     ProductoForm,
@@ -1536,29 +1537,31 @@ def registrar_pago_compra(request, id_publico):
 
 
 @login_required
-@user_passes_test(es_administrador) # Ojo: Solo administradores deberían ver esto
+@user_passes_test(es_administrador)
 def reporte_ingresos(request):
-    # 1. Capturar fechas del formulario GET (si existen)
     fecha_inicio = request.GET.get('fecha_inicio')
     fecha_fin = request.GET.get('fecha_fin')
 
     pagos = PagoVenta.objects.all().select_related('venta', 'registrado_por')
 
-    # 2. Lógica de filtrado por fechas
     if fecha_inicio and fecha_fin:
         pagos = pagos.filter(fecha_registro__date__range=[fecha_inicio, fecha_fin])
     else:
-        # Por defecto, mostramos los ingresos del día de hoy
         hoy = timezone.now().date()
         pagos = pagos.filter(fecha_registro__date=hoy)
         fecha_inicio = hoy.strftime('%Y-%m-%d')
         fecha_fin = hoy.strftime('%Y-%m-%d')
-
-    # 3. Agrupación matemática (Sumatoria por método de pago)
-    totales_por_metodo = pagos.values('metodo_pago').annotate(total=Sum('monto')).order_by('-total')
     
-    # 4. Cálculo del Gran Total
-    gran_total = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+    # Agrupación segura
+    totales_por_metodo = pagos.values('metodo_pago').annotate(
+        total=Coalesce(Sum('monto'), Value(0, output_field=DecimalField()))
+    ).order_by('-total')
+    
+    # Cálculo del Gran Total seguro
+    agregado = pagos.aggregate(
+        gran_total=Coalesce(Sum('monto'), Value(0, output_field=DecimalField()))
+    )
+    gran_total = agregado['gran_total']
 
     context = {
         'pagos': pagos,
