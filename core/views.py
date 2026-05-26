@@ -811,11 +811,17 @@ def venta_sellar(request, codigo_generacion):
         messages.warning(request, 'No puedes aprobar una cotización vacía. Agrega productos.')
         return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
-    # 2. BLOQUEO FISCAL B2B
+        # # 2. BLOQUEO FISCAL Y COMERCIAL B2B
+    # Validamos CCF (Legalidad)
     if venta.tipo_documento == 'CCF':
         if not venta.cliente.nrc or not venta.cliente.giro:
             messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC o Giro.")
             return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
+
+    # Validamos FCF (Comercial - La nueva regla que discutimos)
+    if venta.tipo_documento == 'FCF' and venta.condicion_pago == 'credito':
+        messages.error(request, 'Las facturas FCF deben ser al contado. No se permite crédito para este documento.')
+        return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
     try:
         with transaction.atomic():
