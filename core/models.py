@@ -401,14 +401,19 @@ class Venta(models.Model):
 
     @property
     def estado_mora(self):
+        # 1. Si está pagado o es contado, al día.
         if self.estado_pago == 'pagado' or self.condicion_pago == 'contado':
             return 'al_dia'
-        if self.fecha_vencimiento and timezone.now().date() > self.fecha_vencimiento:
+        
+        # 2. Si no hay fecha de vencimiento (datos viejos), tratamos de calcularla al vuelo o marcamos por vencer
+        if not self.fecha_vencimiento:
+            return 'por_vencer'
+            
+        # 3. Comparación segura
+        if timezone.now().date() > self.fecha_vencimiento:
             return 'vencido'
+            
         return 'por_vencer'
-
-    def __str__(self):
-        return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"
 
 
 class DetalleVenta(models.Model):
