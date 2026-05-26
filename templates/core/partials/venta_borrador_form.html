@@ -27,18 +27,6 @@
                             </select>
                         </div>
                         </div>
-                    <div class="mb-3">
-                        <label class="form-label">Selecciona el Cliente</label>
-                        
-                        <select name="cliente" class="form-select">
-                            <option value="">-- Cliente Mostrador (Automático) --</option>
-                            {% for cliente in clientes %}
-                                <option value="{{ cliente.id }}">{{ cliente.nombres }} {{ cliente.apellidos }}</option>
-                            {% empty %}
-                                <option value="" disabled>No hay clientes registrados.</option>
-                            {% endfor %}
-                        </select>
-                    </div>
 
                     <div class="mb-3">
                         <label class="form-label required">Tipo de Comprobante</label>
