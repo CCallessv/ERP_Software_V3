@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
@@ -351,71 +352,60 @@ class DetalleCompra(models.Model):
 
 ###################################################
 class Venta(models.Model):
-    ordering = ['-fecha_hora_emision']
-    ESTADOS = (
-        ('borrador', 'Borrador'),
-        ('sellada', 'Sellada'), 
-        ('anulada', 'Anulada'),
-    )
-    
-    TIPO_DOC = (
-        ('FCF', 'Factura de Consumidor Final'),
-        ('CCF', 'Comprobante de Crédito Fiscal'),
-    )
+    # Definiciones de opciones
+    ESTADOS = (('borrador', 'Borrador'), ('sellada', 'Sellada'), ('anulada', 'Anulada'))
+    TIPO_DOC = (('FCF', 'Factura de Consumidor Final'), ('CCF', 'Comprobante de Crédito Fiscal'))
+    ESTADOS_PAGO = (('pendiente', 'Pendiente de Pago'), ('pagado', 'Pagado'))
+    CONDICION_PAGO = (('contado', 'Contado'), ('credito', 'Crédito'))
+    METODO_PAGO = (('efectivo', 'Efectivo'), ('transferencia', 'Transferencia Bancaria'), 
+                   ('tarjeta', 'Tarjeta de Crédito/Débito'), ('cheque', 'Cheque'), ('otro', 'Otro'))
 
-    ESTADOS_PAGO = (
-        ('pendiente', 'Pendiente de Pago'),
-        ('pagado', 'Pagado'),
-    )
-    
+    # Relaciones y Identificación
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT)
-    tipo_documento = models.CharField(max_length=3, choices=TIPO_DOC, default='FCF')
-
-    # CAMPOS ESTRICTOS PARA FACTURACIÓN ELECTRÓNICA (DTE)
     codigo_generacion = models.UUIDField(default=uuid.uuid4, editable=False, null=True)
     numero_control = models.CharField(max_length=40, unique=True, blank=True, null=True)
     sello_recepcion = models.CharField(max_length=45, blank=True, null=True)
+    numero_factura = models.CharField(max_length=20, unique=True, blank=True, null=True)
 
-    CONDICION_PAGO = (
-        ('contado', 'Contado'),
-        ('credito', 'Crédito'),
-    )
-    METODO_PAGO = (
-        ('efectivo', 'Efectivo'),
-        ('transferencia', 'Transferencia Bancaria'),
-        ('tarjeta', 'Tarjeta de Crédito/Débito'),
-        ('cheque', 'Cheque'),
-        ('otro', 'Otro'),
-    )
-
+    # Configuración de pago
+    tipo_documento = models.CharField(max_length=3, choices=TIPO_DOC, default='FCF')
     condicion_pago = models.CharField(max_length=10, choices=CONDICION_PAGO, default='contado')
     metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO, default='efectivo')
-    dias_credito = models.PositiveIntegerField(default=0, help_text="Aplica solo si la condición es Crédito")
-    
-    # Nuevo campo para controlar la deuda (CxC) en lugar de la caja
+    dias_credito = models.PositiveIntegerField(default=0)
     estado_pago = models.CharField(max_length=15, choices=ESTADOS_PAGO, default='pendiente')
     
-    # METADATOS Y OBSERVACIONES
-    numero_factura = models.CharField(max_length=20, unique=True, blank=True, null=True)
-    fecha_hora_emision = models.DateTimeField(auto_now_add=True) 
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
-    observaciones = models.TextField(blank=True, null=True) 
+    # Fechas (La fecha de vencimiento fija es clave para el reporte de mora)
+    fecha_hora_emision = models.DateTimeField(auto_now_add=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
     
-    # TOTALES GRANULARES
+    # Estados y Totales
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
+    observaciones = models.TextField(blank=True, null=True)
     sumatoria_gravadas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     sumatoria_exentas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     sumatoria_no_sujetas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
     descuento_global = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    # IMPUESTOS
-    iva = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) 
+    iva = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     iva_percibido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     iva_retenido = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
     total_pagar = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
-    # Nota: Ya no hay ForeignKey a SesionCaja. 
+    class Meta:
+        ordering = ['-fecha_hora_emision']
+
+    def save(self, *args, **kwargs):
+        # Lógica de negocio para fijar la fecha de vencimiento al sellar
+        if self.estado == 'sellada' and self.condicion_pago == 'credito' and not self.fecha_vencimiento:
+            self.fecha_vencimiento = timezone.now().date() + timedelta(days=self.dias_credito)
+        super().save(*args, **kwargs)
+
+    @property
+    def estado_mora(self):
+        if self.estado_pago == 'pagado' or self.condicion_pago == 'contado':
+            return 'al_dia'
+        if self.fecha_vencimiento and timezone.now().date() > self.fecha_vencimiento:
+            return 'vencido'
+        return 'por_vencer'
 
     def __str__(self):
         return f"Venta {self.codigo_generacion} - {self.cliente.nombres}"

@@ -910,7 +910,7 @@ def venta_sellar(request, codigo_generacion):
         
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
-    
+
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
@@ -919,29 +919,29 @@ def crear_venta_borrador(request):
         return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
 
     if request.method == 'POST':
+        # Buscamos el ID o lo dejamos nulo
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
         condicion_pago = request.POST.get('condicion_pago') 
 
-        # 1. Validación de campos vacíos
-        if not cliente_id or not tipo_documento or not condicion_pago:
-            clientes = Cliente.objects.filter(estado=True).order_by('nombres')
-            return render(request, 'core/partials/venta_borrador_form.html', {
-                'clientes': clientes,
-                'error': "Faltan datos. Debes seleccionar cliente, documento y condición de pago."
-            })
+        # Si el usuario no seleccionó cliente, buscamos el "Mostrador"
+        if not cliente_id:
+            try:
+                cliente_seleccionado = Cliente.objects.get(documento="0000-000000-000-0")
+            except Cliente.DoesNotExist:
+                return render(request, 'core/partials/venta_borrador_form.html', {
+                    'error': "Error crítico: No existe el Cliente Mostrador en la base de datos."
+                })
+        else:
+            cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # 2. BLOQUEO HÍBRIDO FRONTEND: No dejar que nazca un error
+        # Validación de FCF al Crédito (el candado que agregamos antes)
         if tipo_documento == 'FCF' and condicion_pago == 'credito':
-            clientes = Cliente.objects.filter(estado=True).order_by('nombres')
             return render(request, 'core/partials/venta_borrador_form.html', {
-                'clientes': clientes,
-                'error': "Lógica inválida: Las facturas FCF no pueden ser emitidas al crédito. Cambia a CCF o pago al Contado."
+                'error': "Las facturas FCF deben ser al contado."
             })
 
-        cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
-
-        # 3. Crear la venta con todos sus datos
+        # Crear la venta
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
@@ -1200,18 +1200,23 @@ def anular_venta(request, codigo_generacion):
 @login_required
 @user_passes_test(es_administrador)
 def cuentas_por_cobrar_list(request):
-    # Anotamos cuánto se ha pagado de cada factura restando la tabla hija 'pagos'
+    # 1. Filtramos y calculamos el saldo real en la DB
     pendientes = Venta.objects.filter(
         estado='sellada', 
         estado_pago='pendiente',
-        condicion_pago='credito' # Bloqueo extra: Solo ventas a crédito, no vayas a meter ventas de contado trabadas.
+        condicion_pago='credito'
     ).annotate(
         monto_abonado=Coalesce(Sum('pagos__monto'), Value(0), output_field=DecimalField()),
         saldo_real=F('total_pagar') - F('monto_abonado')
-    ).order_by('fecha_hora_emision')
+    ).order_by('fecha_vencimiento') # Ordenamos por fecha de vencimiento (lo más viejo primero)
 
-    # Ahora sumamos el saldo REAL que la gente nos debe, no el total histórico
-    total_por_cobrar = sum(v.saldo_real for v in pendientes)
+    # 2. Calculamos el total usando la base de datos directamente
+    # Esto es mucho más eficiente que usar sum() en Python
+    stats = pendientes.aggregate(
+        total_deuda=Sum(F('total_pagar') - F('monto_abonado'))
+    )
+    
+    total_por_cobrar = stats['total_deuda'] or Decimal('0.00')
     conteo_facturas = pendientes.count()
 
     context = {

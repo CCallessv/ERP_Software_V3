@@ -39,9 +39,9 @@
                             <th class="w-1"></th>
                         </tr>
                     </thead>
-                    <tbody>
+                        <tbody>
                         {% for venta in pendientes %}
-                        <tr>
+                        <tr class="{% if venta.estado_mora == 'vencido' %}table-danger{% elif venta.estado_mora == 'por_vencer' %}table-warning{% endif %}">
                             <td class="text-muted">{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
                             
                             <td>
@@ -53,71 +53,27 @@
                                 <span class="badge {% if venta.condicion_pago == 'credito' %}bg-purple-lt{% else %}bg-azure-lt{% endif %}">
                                     {{ venta.get_condicion_pago_display }}
                                 </span>
+                                {% if venta.estado_mora == 'vencido' %}
+                                    <span class="badge bg-red ms-1">VENCIDO</span>
+                                {% elif venta.estado_mora == 'por_vencer' %}
+                                    <span class="badge bg-yellow ms-1 text-dark">Por vencer</span>
+                                {% endif %}
                             </td>
                             
                             <td>
                                 <span class="text-muted">{{ venta.dias_credito }} días plazo</span>
+                                <div class="small text-muted">Vence: {{ venta.fecha_vencimiento|date:"d/m/Y" }}</div>
                             </td>
                             
-                            <!-- COLUMNA DEL MONTO CORRECTAMENTE ASIGNADA -->
-                            <td class="fw-bold text-danger">${{ venta.saldo_real|floatformat:2 }}</td>
+                            <td class="fw-bold {% if venta.estado_mora == 'vencido' %}text-danger{% endif %}">${{ venta.saldo_real|floatformat:2 }}</td>
                             
-                            <!-- ÚLTIMA CELDA: BOTÓN Y MODAL EMPAQUETADOS JUNTOS -->
                             <td>
                                 <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-pago-{{ venta.id }}">
                                     Registrar Pago
                                 </button>
-                    
-                                <!-- INICIO DEL MODAL -->
+                                
                                 <div class="modal modal-blur fade" id="modal-pago-{{ venta.id }}" tabindex="-1" role="dialog" aria-hidden="true">
-                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
-                                        <div class="modal-content">
-                                            
-                                            <!-- EL FORMULARIO ENVUELVE TODO EL CONTENIDO DEL MODAL -->
-                                            <form action="{% url 'registrar_pago_factura' venta.codigo_generacion %}" method="POST">
-                                                {% csrf_token %}
-                                                
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">Registrar Pago</h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                
-                                                <div class="modal-body">
-                                                    <div class="alert alert-info">
-                                                        Saldo actual de la deuda: <strong>${{ venta.saldo_real|floatformat:2 }}</strong>
-                                                    </div>
-
-                                                    <div class="mb-3">
-                                                        <label class="form-label fw-bold text-danger required">Monto a Recibir ($)</label>
-                                                        <input type="number" step="0.01" min="0.01" max="{{ venta.saldo_real|stringformat:'.2f' }}" name="monto" class="form-control" value="{{ venta.saldo_real|stringformat:'.2f' }}" required>
-                                                    </div>
-                                                    
-                                                    <div class="mb-3">
-                                                        <label class="form-label required">Método de Pago</label>
-                                                        <select name="metodo_pago" class="form-select" required>
-                                                            <option value="efectivo">Efectivo (Oficina)</option>
-                                                            <option value="transferencia">Transferencia Bancaria</option>
-                                                            <option value="tarjeta">Tarjeta de Crédito/Débito</option>
-                                                            <option value="cheque">Cheque</option>
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Número de Referencia (Opcional)</label>
-                                                        <input type="text" name="comprobante_pago" class="form-control" placeholder="Ej: Transf #998877">
-                                                    </div>
-                                                </div>
-                                                
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                    <button type="submit" class="btn btn-primary w-100">Confirmar Ingreso</button>
-                                                </div>
-                                            </form>
-                                            
-                                        </div>
                                     </div>
-                                </div>
-                                <!-- FIN DEL MODAL -->
                             </td>
                         </tr>
                         {% empty %}
