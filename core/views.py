@@ -917,7 +917,6 @@ def venta_sellar(request, codigo_generacion):
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
 
-@require_POST
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
