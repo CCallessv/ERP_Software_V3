@@ -920,9 +920,6 @@ def venta_sellar(request, codigo_generacion):
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
-
-    return HttpResponse("Error crítico simulado", status=500)
-    
     if request.method == 'GET':
         clientes = Cliente.objects.filter(estado=True).exclude(nombres='CLIENTE MOSTRADOR').order_by('nombres')
         return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
