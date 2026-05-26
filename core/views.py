@@ -953,7 +953,7 @@ def crear_venta_borrador(request):
         response['HX-Redirect'] = reverse('venta_detalle', kwargs={'codigo_generacion': nueva_venta.codigo_generacion})
         return response
 
-#VENTAS
+
 @login_required
 @user_passes_test(es_administrador)
 def venta_list(request):

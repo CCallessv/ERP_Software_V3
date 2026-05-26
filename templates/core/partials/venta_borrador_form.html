@@ -11,12 +11,10 @@
                 <div class="modal-body">
                     
                     <div class="mb-3">
-                        <label class="form-label required">Selecciona el Cliente</label>
-                        {% if error %}
-                            <div class="alert alert-danger mb-3">{{ error }}</div>
-                        {% endif %}
-                        <select name="cliente" class="form-select" required>
-                            <option value="" disabled selected>-- Elige un cliente --</option>
+                        <label class="form-label">Selecciona el Cliente</label>
+                        
+                        <select name="cliente" class="form-select">
+                            <option value="">-- Cliente Mostrador (Automático) --</option>
                             {% for cliente in clientes %}
                                 <option value="{{ cliente.id }}">{{ cliente.nombres }} {{ cliente.apellidos }}</option>
                             {% empty %}
