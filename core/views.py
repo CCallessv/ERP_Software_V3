@@ -915,7 +915,7 @@ def venta_sellar(request, codigo_generacion):
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
     if request.method == 'GET':
-        clientes = Cliente.objects.filter(estado=True).order_by('nombres')
+        clientes = Cliente.objects.filter(estado=True).exclude(nombres='CLIENTE MOSTRADOR').order_by('nombres')
         return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
 
     if request.method == 'POST':
