@@ -935,10 +935,17 @@ def crear_venta_borrador(request):
         else:
             cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # Validación de FCF al Crédito (el candado que agregamos antes)
+        # Validación de FCF al Credito (el candado que agregamos antes)
+       
         if tipo_documento == 'FCF' and condicion_pago == 'credito':
+            clientes = Cliente.objects.filter(estado=True).exclude(nombres='CLIENTE MOSTRADOR').order_by('nombres')
+            
             return render(request, 'core/partials/venta_borrador_form.html', {
-                'error': "Las facturas FCF deben ser al contado."
+                'error': "Las facturas FCF deben ser al contado.",
+                'clientes': clientes,
+                # Estas variables son las que hacen que el HTML sepa qué marcar como 'selected'
+                'tipo_documento_seleccionado': tipo_documento, 
+                'condicion_pago_seleccionada': condicion_pago
             })
 
         # Crear la venta
