@@ -73,7 +73,43 @@
                                 </button>
                                 
                                 <div class="modal modal-blur fade" id="modal-pago-{{ venta.id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                        <div class="modal-content">
+                                            <form action="{% url 'registrar_pago_factura' venta.codigo_generacion %}" method="POST">
+                                                {% csrf_token %}
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Registrar Pago</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="alert alert-info">
+                                                        Saldo actual: <strong>${{ venta.saldo_real|floatformat:2 }}</strong>
+                                                    </div>
+                                
+                                                    <div class="mb-3">
+                                                        <label class="form-label required">Monto a Recibir ($)</label>
+                                                        <input type="number" step="0.01" min="0.01" max="{{ venta.saldo_real|stringformat:'.2f' }}" 
+                                                               name="monto" class="form-control" value="{{ venta.saldo_real|stringformat:'.2f' }}" required>
+                                                    </div>
+                                
+                                                    <div class="mb-3">
+                                                        <label class="form-label required">Método de Pago</label>
+                                                        <select name="metodo_pago" class="form-select" required>
+                                                            <option value="efectivo">Efectivo</option>
+                                                            <option value="transferencia">Transferencia</option>
+                                                            <option value="tarjeta">Tarjeta</option>
+                                                            <option value="cheque">Cheque</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                    <button type="submit" class="btn btn-primary w-100">Confirmar Ingreso</button>
+                                                </div>
+                                            </form>
+                                        </div>
                                     </div>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
