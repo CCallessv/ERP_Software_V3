@@ -1071,7 +1071,26 @@ def venta_agregar_producto(request, codigo_generacion):
         )
     
     venta.refresh_from_db()
-    return render(request, 'core/partials/venta_tabla_y_totales.html', {'venta': venta})
+
+
+    subtotal_neto = Decimal('0.00')
+    iva_calculado = Decimal('0.00')
+    
+    
+    total = venta.total_pagar or Decimal('0.00') 
+    
+    if total > 0:
+        subtotal_neto = (total / Decimal('1.13')).quantize(Decimal('0.01'))
+        iva_calculado = (total - subtotal_neto).quantize(Decimal('0.01'))
+        
+    context = {
+        'venta': venta,
+        'subtotal_neto': subtotal_neto,
+        'iva_calculado': iva_calculado
+    }
+    
+    return render(request, 'core/partials/venta_tabla_y_totales.html', context)
+    
 
 @login_required
 @require_POST
