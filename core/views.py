@@ -814,8 +814,8 @@ def venta_sellar(request, codigo_generacion):
         # # 2. BLOQUEO FISCAL Y COMERCIAL B2B
     # Validamos CCF (Legalidad)
     if venta.tipo_documento == 'CCF':
-        if not venta.cliente.nrc or not venta.cliente.giro:
-            messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC o Giro.")
+        if not venta.cliente.nrc:
+            messages.error(request, f"Bloqueo Legal: No puedes emitir un CCF. El cliente {venta.cliente.nombres} no tiene registrado su NRC.")
             return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
     # Validamos FCF (Comercial - La nueva regla que discutimos)
