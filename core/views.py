@@ -917,6 +917,7 @@ def venta_sellar(request, codigo_generacion):
     return redirect('venta_detalle', codigo_generacion=venta.codigo_generacion)
 
 
+@require_POST
 @login_required
 @user_passes_test(es_administrador)
 def crear_venta_borrador(request):
@@ -925,14 +926,44 @@ def crear_venta_borrador(request):
         return render(request, 'core/partials/venta_borrador_form.html', {'clientes': clientes})
 
     if request.method == 'POST':
-        # Buscamos el ID o lo dejamos nulo
         cliente_id = request.POST.get('cliente')
         tipo_documento = request.POST.get('tipo_documento')
         condicion_pago = request.POST.get('condicion_pago') 
 
-        # Si el usuario no seleccionó cliente, buscamos el "Mostrador"
+        # QuerySet optimizado para re-renderizar el formulario en caso de error
+        clientes_queryset = Cliente.objects.filter(estado=True).exclude(nombres='CLIENTE MOSTRADOR').order_by('nombres')
+
+        # CANDADO 1: CCF requiere obligatoriamente un cliente seleccionado
+        if tipo_documento == 'CCF' and not cliente_id:
+            return render(request, 'core/partials/venta_borrador_form.html', {
+                'error': "No puedes emitir un Crédito Fiscal (CCF) al Cliente Mostrador. Selecciona un cliente con NRC.",
+                'clientes': clientes_queryset,
+                'tipo_documento_seleccionado': tipo_documento,
+                'condicion_pago_seleccionada': condicion_pago
+            })
+
+        # CANDADO 2: No se puede otorgar crédito a un cliente no registrado
+        if condicion_pago == 'credito' and not cliente_id:
+            return render(request, 'core/partials/venta_borrador_form.html', {
+                'error': "Riesgo Financiero: No puedes otorgar crédito al Cliente Mostrador. Selecciona un cliente registrado.",
+                'clientes': clientes_queryset,
+                'tipo_documento_seleccionado': tipo_documento,
+                'condicion_pago_seleccionada': condicion_pago
+            })
+
+        # CANDADO 3: FCF no permite condiciones de crédito
+        if tipo_documento == 'FCF' and condicion_pago == 'credito':
+            return render(request, 'core/partials/venta_borrador_form.html', {
+                'error': "Las facturas FCF deben ser al contado.",
+                'clientes': clientes_queryset,
+                'tipo_documento_seleccionado': tipo_documento, 
+                'condicion_pago_seleccionada': condicion_pago
+            })
+
+        # Una vez superados los filtros de negocio, asignamos el cliente de forma segura
         if not cliente_id:
             try:
+                # Asegúrate de que este valor coincida exactamente con el de tu BD
                 cliente_seleccionado = Cliente.objects.get(documento="0000-000000-000-0")
             except Cliente.DoesNotExist:
                 return render(request, 'core/partials/venta_borrador_form.html', {
@@ -941,20 +972,16 @@ def crear_venta_borrador(request):
         else:
             cliente_seleccionado = get_object_or_404(Cliente, id=cliente_id)
 
-        # Validación de FCF al Credito (el candado que agregamos antes)
-       
-        if tipo_documento == 'FCF' and condicion_pago == 'credito':
-            clientes = Cliente.objects.filter(estado=True).exclude(nombres='CLIENTE MOSTRADOR').order_by('nombres')
-            
+        # CANDADO 4: Si es CCF, asegurar que el cliente seleccionado tenga NRC
+        if tipo_documento == 'CCF' and not cliente_seleccionado.nrc:
             return render(request, 'core/partials/venta_borrador_form.html', {
-                'error': "Las facturas FCF deben ser al contado.",
-                'clientes': clientes,
-                # Estas variables son las que hacen que el HTML sepa qué marcar como 'selected'
-                'tipo_documento_seleccionado': tipo_documento, 
+                'error': f"El cliente {cliente_seleccionado.nombres} no tiene NRC registrado. No puede recibir un CCF.",
+                'clientes': clientes_queryset,
+                'tipo_documento_seleccionado': tipo_documento,
                 'condicion_pago_seleccionada': condicion_pago
             })
 
-        # Crear la venta
+        # Inserción limpia en la base de datos
         nueva_venta = Venta.objects.create(
             cliente=cliente_seleccionado,
             estado='borrador',
