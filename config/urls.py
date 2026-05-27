@@ -21,7 +21,7 @@ from core.views import home, exit, clientes_list, crear_cliente, editar_cliente,
 from core.views import proveedor_list, proveedor_crear, proveedor_editar, eliminar_proveedor,categorias_list,crear_categoria,editar_categoria,eliminar_categoria,crear_compra
 from core.views import compra_detalle,detalle_compra_crear,detalle_compra_eliminar,compra_confirmar,compra_list,compra_eliminar,anular_venta,cuentas_por_cobrar_list,registrar_pago_factura,kardex_list
 from core.views import crear_venta_borrador, venta_detalle, venta_agregar_producto, venta_eliminar_producto,venta_sellar,venta_list, generar_pdf_venta, ajuste_list, crear_ajuste,kardex_detalle,solicitar_acceso
-from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia,  kardex_imprimir_pdf, reactivar_cliente,cuentas_por_pagar_list,registrar_pago_compra
+from core.views import CustomLoginView, recepciones_list, recepcion_detalle, compra_resolver_discrepancia,  kardex_imprimir_pdf, reactivar_cliente,cuentas_por_pagar_list,registrar_pago_compra,reporte_ingresos
 from django.contrib.auth.views import LogoutView
 
 
@@ -96,6 +96,7 @@ urlpatterns = [
    path('kardex/<int:producto_id>/pdf/', kardex_imprimir_pdf, name='kardex_pdf'),
 
    path('cuentas-por-pagar/', cuentas_por_pagar_list, name='cxp_list'),
-path('cuentas-por-pagar/<uuid:id_publico>/pago/', registrar_pago_compra, name='registrar_pago_compra'),
+   path('cuentas-por-pagar/<uuid:id_publico>/pago/', registrar_pago_compra, name='registrar_pago_compra'),
+   path('reportes/ingresos/', reporte_ingresos, name='reporte_ingresos'),
 ]
 
