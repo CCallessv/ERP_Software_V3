@@ -910,7 +910,10 @@ def venta_sellar(request, codigo_generacion):
                 # --- INYECCIÓN FINANCIERA (EL PARCHE) ---
                 # Capturamos el metodo de pago que el usuario seleccionó en el frontend
                 # Si por algun motivo el formulario no lo envia, asumimos 'Efectivo' por seguridad
-                metodo_seleccionado = request.POST.get('metodo_pago', 'Efectivo')
+                metodo_seleccionado = request.POST.get('metodo_pago')
+                
+                if not metodo_seleccionado:
+                    metodo_seleccionado = 'efectivo'  
                 
                 PagoVenta.objects.create(
                     venta=venta,

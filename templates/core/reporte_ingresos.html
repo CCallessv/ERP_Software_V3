@@ -72,7 +72,7 @@
                             <td>{{ pago.fecha_registro|date:"d/m/Y H:i" }}</td>
                             <td>{{ pago.registrado_por.username }}</td>
                             <td>{{ pago.venta.codigo_generacion|truncatechars:15 }}</td>
-                            <td><span class="badge bg-secondary">{{ pago.metodo_pago }}</span></td>
+                            <td><span class="badge bg-secondary">{{ pago.get_metodo_pago_display|default:pago.metodo_pago }}</span></td>
                             <td class="text-success fw-bold">${{ pago.monto }}</td>
                         </tr>
                         {% empty %}
