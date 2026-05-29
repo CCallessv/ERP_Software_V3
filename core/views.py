@@ -32,6 +32,8 @@ from django.db.models import Sum, F, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.db.models import Value
 from django.db.models.functions import Lower
+from django.db.models import Sum, Value, DecimalField
+from django.db.models.functions import Lower, Coalesce
 
 from .forms import (
     ProductoForm,
