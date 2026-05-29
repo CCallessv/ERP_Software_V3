@@ -31,6 +31,7 @@ from django.urls import reverse_lazy
 from django.db.models import Sum, F, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.db.models import Value
+from django.db.models.functions import Lower
 
 from .forms import (
     ProductoForm,
@@ -1567,8 +1568,12 @@ def reporte_ingresos(request):
         fecha_inicio = hoy.strftime('%Y-%m-%d')
         fecha_fin = hoy.strftime('%Y-%m-%d')
     
-    # Agrupación segura
-    totales_por_metodo = pagos.values('metodo_pago').annotate(
+    
+
+    # Agrupación segura y normalizada
+    totales_por_metodo = pagos.annotate(
+        metodo_normalizado=Lower('metodo_pago')
+    ).values('metodo_normalizado').annotate(
         total=Coalesce(Sum('monto'), Value(0, output_field=DecimalField()))
     ).order_by('-total')
     
