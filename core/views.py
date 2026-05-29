@@ -1597,4 +1597,4 @@ def reporte_ingresos(request):
         'total_neto': total_neto         # ENVIAR AL HTML
     }
 
-    return render(request, 'reporte_ingresos.html', context)
+    return render(request, 'core/reporte_ingresos.html', context)
