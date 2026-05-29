@@ -2,85 +2,91 @@
 
 {% block content %}
 <div class="page-header d-print-none">
-    <div class="row align-items-center">
-        <div class="col">
-            <h2 class="page-title">Corte de Caja / Reporte de Ingresos</h2>
+    <div class="container-xl">
+        <div class="row align-items-center">
+            <div class="col">
+                <h2 class="page-title">Corte de Caja / Reporte de Ingresos</h2>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="page-body">
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="GET" class="row row-cards align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">Fecha Inicio</label>
-                    <input type="date" class="form-control" name="fecha_inicio" value="{{ fecha_inicio }}" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Fecha Fin</label>
-                    <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}" required>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="row row-cards mb-3">
-        <div class="col-sm-6 col-lg-3">
-            <div class="card card-sm">
-                <div class="card-body">
-                    <div class="font-weight-medium">Gran Total Ingresado</div>
-                    <div class="text-success fw-bold fs-2">${{ gran_total }}</div>
-                </div>
-            </div>
-        </div>
+    <div class="container-xl">
         
-        {% for metodo in totales_por_metodo %}
-        <div class="col-sm-6 col-lg-3">
-            <div class="card card-sm">
-                <div class="card-body">
-                    <div class="font-weight-medium">Total {{ metodo.metodo_pago|upper }}</div>
-                    <div class="text-muted fs-3">${{ metodo.total }}</div>
-                </div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="row row-cards align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Inicio</label>
+                        <input type="date" class="form-control" name="fecha_inicio" value="{{ fecha_inicio }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Fin</label>
+                        <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                    </div>
+                </form>
             </div>
         </div>
-        {% endfor %}
-    </div>
 
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-vcenter card-table text-nowrap">
-                <thead>
-                    <tr>
-                        <th>Fecha y Hora</th>
-                        <th>Cajero / Usuario</th>
-                        <th>Referencia Documento</th>
-                        <th>Método</th>
-                        <th>Monto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for pago in pagos %}
-                    <tr>
-                        <td>{{ pago.fecha_registro|date:"d/m/Y H:i" }}</td>
-                        <td>{{ pago.registrado_por.username }}</td>
-                        <td>{{ pago.venta.codigo_generacion|truncatechars:15 }}</td>
-                        <td><span class="badge bg-secondary">{{ pago.metodo_pago }}</span></td>
-                        <td class="text-success fw-bold">${{ pago.monto }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center py-4 text-muted">
-                            No se encontraron ingresos registrados en este rango de fechas.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="row row-cards mb-3">
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-sm">
+                    <div class="card-body">
+                        <div class="font-weight-medium">Gran Total Ingresado</div>
+                        <div class="text-success fw-bold fs-2">${{ gran_total }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            {% for metodo in totales_por_metodo %}
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-sm">
+                    <div class="card-body">
+                        <div class="font-weight-medium">Total {{ metodo.metodo_pago|upper }}</div>
+                        <div class="text-muted fs-3">${{ metodo.total }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
         </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Fecha y Hora</th>
+                            <th>Cajero / Usuario</th>
+                            <th>Referencia Documento</th>
+                            <th>Método</th>
+                            <th>Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pago in pagos %}
+                        <tr>
+                            <td>{{ pago.fecha_registro|date:"d/m/Y H:i" }}</td>
+                            <td>{{ pago.registrado_por.username }}</td>
+                            <td>{{ pago.venta.codigo_generacion|truncatechars:15 }}</td>
+                            <td><span class="badge bg-secondary">{{ pago.metodo_pago }}</span></td>
+                            <td class="text-success fw-bold">${{ pago.monto }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                No se encontraron ingresos registrados en este rango de fechas.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}
