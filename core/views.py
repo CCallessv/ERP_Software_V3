@@ -46,6 +46,7 @@ from .forms import (
     RegistrarPagoForm,
     
     
+    
 )
 from .models import (
     Producto,
@@ -60,6 +61,7 @@ from .models import (
     MovimientoInventario,
     PagoCompra,
     PagoVenta,
+    NotaCredito
 )
 
 def es_administrador(user):
@@ -1241,48 +1243,49 @@ def crear_ajuste(request):
 def anular_venta(request, codigo_generacion):
     venta = get_object_or_404(Venta, codigo_generacion=codigo_generacion)
 
-    if venta.estado not in ['completada', 'sellada']: 
-        messages.error(request, "Solo puedes anular facturas procesadas.")
+    # Evitar estados ambiguos. Solo se anula lo que está formalmente sellado.
+    if venta.estado != 'sellada': 
+        messages.error(request, "Solo puedes anular facturas que ya han sido selladas.")
         return redirect('venta_list')
 
     if request.method == 'POST':
+        motivo = request.POST.get('motivo_anulacion')
+        if not motivo:
+            messages.error(request, "Bloqueo Contable: Es obligatorio especificar un motivo para emitir la Nota de Crédito.")
+            return redirect('venta_list')
+
         try:
             with transaction.atomic(): 
-                # 1. ¿HAY DINERO QUE DEVOLVER?
-                pagos = venta.pagos.all()
-                total_pagado = pagos.aggregate(total=Sum('monto'))['total'] or 0
+                # 1. EMISIÓN DE NOTA DE CRÉDITO
+                # Este documento respalda legalmente el egreso de dinero y la anulación fiscal.
+                NotaCredito.objects.create(
+                    venta_origen=venta,
+                    monto_revertido=venta.total_pagar,  # Mantenemos el valor real de la transacción
+                    motivo_anulacion=motivo,
+                    emitida_por=request.user
+                )
 
-                if total_pagado > 0:
-                    # Registramos un "pago negativo" o eliminamos los pagos para limpiar la caja
-                    # En este caso, eliminamos para que el saldo de la factura no quede negativo
-                    pagos.delete()
-                    nota_pago = f" Se revirtieron ${total_pagado} de la caja."
-                else:
-                    nota_pago = ""
-
-                # 2. Reversión de Kárdex
+                # 2. REVERSIÓN DE KÁRDEX
                 for detalle in venta.detalles.all():
                     MovimientoInventario.objects.create(
                         producto=detalle.producto,
-                        tipo='ajuste_entrada',
+                        tipo='entrada_ajuste',  # Incrementa el stock de nuevo en bodega
                         cantidad=detalle.cantidad,
                         costo_unitario=detalle.producto.precio_costo,
-                        referencia=f"ANULACIÓN: {str(venta.codigo_generacion)[:8]}",
+                        referencia=f"NC Anulación - {str(venta.codigo_generacion)[:8]}",
                         usuario=request.user,
-                        notas=f"Devolución por anulación de factura.{nota_pago}"
+                        notas=f"Devolución automática. Motivo: {motivo}"
                     )
 
-                # 3. Ajuste Contable y Fiscal
+                # 3. ACTUALIZACIÓN DE ESTADO SIN MUTILAR VALORES
                 venta.estado = 'anulada'
-                venta.estado_pago = 'anulado' # Asegúrate de tener este estado
-                venta.total_pagar = 0
-                # ... (resto de tus sumatorias en 0)
+                # Conservamos venta.total_pagar intacto para auditorías de volumen anulado
                 venta.save()
 
-            messages.success(request, f"Factura anulada.{nota_pago} Stock devuelto al Kárdex.")
+            messages.success(request, f"Factura anulada exitosamente. Se emitió la Nota de Crédito por ${venta.total_pagar} y el stock regresó al inventario.")
         
         except Exception as e:
-            messages.error(request, f"Error: {str(e)}")
+            messages.error(request, f"Error crítico en la transacción de anulación: {str(e)}")
 
     return redirect('venta_list')
 
@@ -1552,43 +1555,44 @@ def registrar_pago_compra(request, id_publico):
     return redirect('cxp_list')
 
 
-@login_required
-@user_passes_test(es_administrador)
 def reporte_ingresos(request):
-    fecha_inicio = request.GET.get('fecha_inicio')
-    fecha_fin = request.GET.get('fecha_fin')
+    # 1. Captura de fechas del GET (asumo que ya lo tienes así)
+    fecha_inicio = request.GET.get('fecha_inicio', timezone.now().date())
+    fecha_fin = request.GET.get('fecha_fin', timezone.now().date())
 
-    pagos = PagoVenta.objects.all().select_related('venta', 'registrado_por')
-
-    if fecha_inicio and fecha_fin:
-        pagos = pagos.filter(fecha_registro__date__range=[fecha_inicio, fecha_fin])
-    else:
-        hoy = timezone.now().date()
-        pagos = pagos.filter(fecha_registro__date=hoy)
-        fecha_inicio = hoy.strftime('%Y-%m-%d')
-        fecha_fin = hoy.strftime('%Y-%m-%d')
+    # 2. Filtrar pagos
+    pagos = PagoVenta.objects.filter(fecha_registro__date__gte=fecha_inicio, fecha_registro__date__lte=fecha_fin)
     
-    
+    # 3. Suma bruta
+    gran_total = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
 
-    # Agrupación segura y normalizada
+    # ---> AQUÍ VA EL CÓDIGO DE LAS NOTAS DE CRÉDITO <---
+    # Filtramos las notas de crédito exactamente en el mismo rango de fechas
+    notas_credito = NotaCredito.objects.filter(
+        fecha_emision__date__gte=fecha_inicio, 
+        fecha_emision__date__lte=fecha_fin
+    ).aggregate(total=Sum('monto_revertido'))['total'] or Decimal('0.00')
+
+    # Calculamos el dinero real que quedó en caja
+    total_neto = gran_total - notas_credito
+    # ---------------------------------------------------
+
+    # 4. Agrupación por método (lo que arreglamos antes)
     totales_por_metodo = pagos.annotate(
         metodo_normalizado=Lower('metodo_pago')
     ).values('metodo_normalizado').annotate(
         total=Coalesce(Sum('monto'), Value(0, output_field=DecimalField()))
     ).order_by('-total')
-    
-    # Cálculo del Gran Total seguro
-    agregado = pagos.aggregate(
-        gran_total=Coalesce(Sum('monto'), Value(0, output_field=DecimalField()))
-    )
-    gran_total = agregado['gran_total']
 
+    # 5. Pasarlo al contexto para que el HTML lo pueda leer
     context = {
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
         'pagos': pagos,
         'totales_por_metodo': totales_por_metodo,
         'gran_total': gran_total,
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': fecha_fin,
+        'notas_credito': notas_credito,  # ENVIAR AL HTML
+        'total_neto': total_neto         # ENVIAR AL HTML
     }
-    
-    return render(request, 'core/reporte_ingresos.html', context)
+
+    return render(request, 'reporte_ingresos.html', context)

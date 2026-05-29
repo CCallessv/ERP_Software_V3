@@ -540,4 +540,25 @@ class PagoVenta(models.Model):
     def __str__(self):
         return f"Abono de ${self.monto} a {self.venta.codigo_generacion}"
 
+
+class NotaCredito(models.Model):
+    codigo_generacion = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    venta_origen = models.OneToOneField(Venta, on_delete=models.PROTECT, related_name='nota_credito')
+    
+    # El monto total que se está revirtiendo/devolviendo
+    monto_revertido = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    motivo_anulacion = models.TextField(help_text="Razón por la cual se anuló la factura y se emitió la NC.")
+    
+    fecha_emision = models.DateTimeField(auto_now_add=True)
+    emitida_por = models.ForeignKey(User, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ['-fecha_emision']
+        verbose_name = 'Nota de Crédito'
+        verbose_name_plural = 'Notas de Crédito'
+
+    def __str__(self):
+        return f"NC-{str(self.codigo_generacion)[:8]} por ${self.monto_revertido}"        
+
         

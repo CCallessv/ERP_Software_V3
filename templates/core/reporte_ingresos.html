@@ -33,11 +33,30 @@
         </div>
 
         <div class="row row-cards mb-3">
+            
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-sm">
                     <div class="card-body">
                         <div class="font-weight-medium">Gran Total Ingresado</div>
                         <div class="text-success fw-bold fs-2">${{ gran_total }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-sm">
+                    <div class="card-body">
+                        <div class="font-weight-medium">Devoluciones (Notas Crédito)</div>
+                        <div class="text-danger fw-bold fs-2">-${{ notas_credito }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-sm bg-primary-lt">
+                    <div class="card-body">
+                        <div class="font-weight-medium">Total Neto Real</div>
+                        <div class="text-primary fw-bold fs-2">${{ total_neto }}</div>
                     </div>
                 </div>
             </div>
