@@ -903,9 +903,22 @@ def venta_sellar(request, codigo_generacion):
             venta.total_pagar = total_real
             venta.estado = 'sellada'
             
-            # Solo si es al contado marcamos la venta como pagada inmediatamente
+            # Solo si es al contado marcamos la venta como pagada y CREAMOS EL RECIBO DE DINERO
             if venta.condicion_pago == 'contado':
                 venta.estado_pago = 'pagado'
+                
+                # --- INYECCIÓN FINANCIERA (EL PARCHE) ---
+                # Capturamos el metodo de pago que el usuario seleccionó en el frontend
+                # Si por algun motivo el formulario no lo envia, asumimos 'Efectivo' por seguridad
+                metodo_seleccionado = request.POST.get('metodo_pago', 'Efectivo')
+                
+                PagoVenta.objects.create(
+                    venta=venta,
+                    monto=total_real,
+                    metodo_pago=metodo_seleccionado,
+                    registrado_por=request.user
+                )
+                # ----------------------------------------
                 
             venta.save()
             
