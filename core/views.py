@@ -1007,7 +1007,8 @@ def crear_venta_borrador(request):
             cliente=cliente_seleccionado,
             estado='borrador',
             tipo_documento=tipo_documento,
-            condicion_pago=condicion_pago 
+            condicion_pago=condicion_pago,
+            dias_credito=cliente_seleccionado.dias_credito 
         )
         
         response = HttpResponse(status=204)
