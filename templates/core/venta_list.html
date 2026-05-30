@@ -86,16 +86,39 @@
                                   </a>
                           
                                   {% if venta.estado == 'completada' or venta.estado == 'sellada' %}
-                                      {% if request.user|tiene_rol:"Administrador" %}
-                                      <form action="{% url 'anular_venta' venta.codigo_generacion %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Estás absolutamente seguro de anular esta factura? Se devolverá el stock al kardex.');">
-                                          {% csrf_token %}
-                                          <button type="submit" class="btn btn-sm btn-danger" title="Anular Documento">
-                                              <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></svg>
-                                              Anular
-                                          </button>
-                                      </form>
-                                      {% endif %}
+                                  {% if request.user|tiene_rol:"Administrador" %}
+                                      
+                                      <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modal-anular-{{ venta.codigo_generacion }}" title="Anular Documento">
+                                          <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></svg>
+                                          Anular
+                                      </button>
+                              
+                                      <div class="modal modal-blur fade" id="modal-anular-{{ venta.codigo_generacion }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                          <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+                                              <div class="modal-content">
+                                                  <form action="{% url 'anular_venta' venta.codigo_generacion %}" method="POST">
+                                                      {% csrf_token %}
+                                                      <div class="modal-body text-center py-4">
+                                                          <svg xmlns="http://www.w3.org/2000/svg" class="icon mb-2 text-danger icon-lg" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 9v2m0 4v.01" /><path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" /></svg>
+                                                          <h3>¿Anular Factura?</h3>
+                                                          <div class="text-muted mb-3">Estás a punto de anular la transacción y devolver el stock al Kárdex. Esta acción emitirá una Nota de Crédito contable.</div>
+                                                          
+                                                          <div class="text-start mt-3">
+                                                              <label class="form-label required">Motivo de la anulación:</label>
+                                                              <textarea class="form-control" name="motivo_anulacion" rows="3" required placeholder="Ej: El cliente devolvió el producto por defecto de fábrica..."></textarea>
+                                                          </div>
+                                                      </div>
+                                                      <div class="modal-footer">
+                                                          <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">Cancelar</button>
+                                                          <button type="submit" class="btn btn-danger">Confirmar Anulación</button>
+                                                      </div>
+                                                  </form>
+                                              </div>
+                                          </div>
+                                      </div>
+                              
                                   {% endif %}
+                              {% endif %}
                           
                               </div>
                           </td>
