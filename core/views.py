@@ -1556,7 +1556,8 @@ def registrar_pago_compra(request, id_publico):
             
     return redirect('cxp_list')
 
-
+@login_required
+@user_passes_test(es_administrador)
 def reporte_ingresos(request):
     # 1. Captura de fechas del GET (asumo que ya lo tienes así)
     fecha_inicio = request.GET.get('fecha_inicio', timezone.now().date())
