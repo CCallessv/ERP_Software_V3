@@ -41,7 +41,7 @@
                     </thead>
                         <tbody>
                         {% for venta in pendientes %}
-                        <tr class="{% if venta.estado_mora == 'vencido' %}table-danger{% elif venta.estado_mora == 'por_vencer' %}table-warning{% endif %}">
+                        <tr class="{% if venta.estado_mora == 'vencido' %}table-danger{% endif %}">
                             <td class="text-muted">{{ venta.fecha_hora_emision|date:"d/m/Y" }}</td>
                             
                             <td>
