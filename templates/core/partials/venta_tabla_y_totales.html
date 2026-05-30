@@ -32,9 +32,12 @@
                         {% if venta.estado == 'borrador' %}
                         <td>
                             <button hx-post="{% url 'venta_eliminar_producto' d.id %}" 
-                                    hx-include="[name='csrfmiddlewaretoken']"
-                                    hx-swap="none" 
-                                    class="btn btn-sm btn-danger btn-icon">X</button>
+                            hx-include="[name='csrfmiddlewaretoken']"
+                            hx-target="#contenedor-facturacion"
+                            hx-swap="innerHTML" 
+                            class="btn btn-sm btn-danger btn-icon">
+                        X
+                    </button>
                         </td>
                         {% endif %}
                     </tr>
